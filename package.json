@@ -1,0 +1,56 @@
+{
+  "name": "veritas-studio",
+  "version": "1.0.0",
+  "description": "A local-first writing studio",
+  "main": "electron/main.cjs",
+  "author": "LeonardoCarolo99",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis",
+    "publish:win": "electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.veritas.studio",
+    "productName": "Veritas Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "app.js",
+      "styles.css",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "LeonardoCarolo99",
+      "repo": "Veritas.Studio",
+      "releaseType": "release"
+    }
+  }
+}

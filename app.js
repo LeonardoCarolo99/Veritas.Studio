@@ -6,6 +6,8 @@
   const STORAGE_KEY = "veritas-studio-vault";
   const PROJECTS_KEY = "veritas-studio-projects";
   const PROJECT_DATA_PREFIX = "veritas-studio-project:";
+  const desktop = window.veritasDesktop;
+  if (desktop) document.documentElement.classList.add("desktop-app");
   const MODULES = [
     { id: "ideation", name: "Ideation", description: "Brainstorming, loglines, and conceptual notes", icon: "✧" },
     { id: "writing", name: "Writing", description: "Manuscript, editor, entities, and plot planner", icon: "✎" },
@@ -286,7 +288,8 @@
     const name = activeProject()?.name || "Untitled Project";
     $("#project-name").textContent = name;
     $("#binder-vault-name").textContent = name;
-    $("#vault-mode").textContent = state.dirHandle ? "Local folder" : "Browser workspace";
+    $("#window-titlebar-caption").textContent = `${name} — Veritas Studio`;
+    $("#vault-mode").textContent = state.dirHandle ? (desktop ? "Windows folder" : "Local folder") : "Browser workspace";
   }
 
   function renderModuleNavigation() {
@@ -765,6 +768,7 @@
   function openProjectManager() {
     const backdrop = document.createElement("div");
     backdrop.className = "dialog-backdrop project-backdrop";
+    const currentProject = activeProject();
     const projects = state.projects.map(project => `
       <article class="project-card${project.id === state.projectId ? " selected" : ""}">
         <div class="project-card-main"><span class="project-card-icon">▧</span><div><strong>${escapeHtml(project.name)}</strong><small>${project.storage === "folder" ? "Local folder" : "Browser workspace"} · ${project.id === state.projectId ? "Current project" : "Project workspace"}</small></div></div>
@@ -775,7 +779,7 @@
       <header class="modal-heading"><div><span class="eyebrow">WORKSPACES</span><h3 id="project-manager-title">Your projects</h3></div><button class="icon-button small" type="button" data-close-manager aria-label="Close">×</button></header>
       <p class="modal-intro">Keep each novel's manuscript, planning, and module settings in its own workspace.</p>
       <div class="project-manager-list">${projects || '<div class="empty-hint">No projects yet. Create your first writing workspace.</div>'}</div>
-      <footer class="project-manager-actions"><button class="button-secondary" type="button" data-create-project="browser">＋ New browser project</button><button class="button-primary" type="button" data-create-project="folder">＋ New project folder</button><button class="button-secondary" type="button" data-open-project-folder>Open existing folder</button></footer>
+      <footer class="project-manager-actions"><button class="button-secondary" type="button" data-create-project="browser">＋ New browser project</button><button class="button-primary" type="button" data-create-project="folder">＋ New project folder</button><button class="button-secondary" type="button" data-copy-project-to-folder ${currentProject?.storage === "folder" ? "disabled title=\"This project already saves to a folder\"" : ""}>Copy current project into repository root</button><button class="button-secondary" type="button" data-open-project-folder>Open existing folder</button></footer>
     </section>`;
     const close = () => backdrop.remove();
     backdrop.addEventListener("click", event => {
@@ -783,7 +787,11 @@
       const switchButton = event.target.closest("[data-switch-project]");
       if (switchButton) {
         const id = switchButton.dataset.switchProject;
-        void switchProject(id).then(close);
+        void switchProject(id).then(close).catch(error => {
+          console.error("Could not switch project.", error);
+          close();
+          notify(`Could not open project: ${error.message}`);
+        });
       }
       const createButton = event.target.closest("[data-create-project]");
       if (createButton) {
@@ -791,6 +799,7 @@
         close();
         void createProject(makeFolder);
       }
+      if (event.target.closest("[data-copy-project-to-folder]")) { close(); void copyProjectToFolder(); }
       if (event.target.closest("[data-open-project-folder]")) { close(); void openVault(); }
     });
     backdrop.addEventListener("change", event => {
@@ -825,6 +834,53 @@
     document.body.append(backdrop);
   }
 
+  async function copyProjectToFolder() {
+    if (!desktop && !window.showDirectoryPicker) {
+      notify("Folder access is unavailable here; run the app from localhost to save project files.");
+      return;
+    }
+    const project = activeProject();
+    if (!project || project.storage === "folder") return;
+    try {
+      const root = desktop
+        ? await desktop.chooseDirectory("Select your Git repository root", "parent")
+        : await window.showDirectoryPicker({ mode: "readwrite" });
+      if (!root) return;
+      const folderName = project.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "Untitled Project";
+      let target;
+      if (desktop) {
+        target = await desktop.createProjectFolder(root.path, folderName);
+      } else {
+        try {
+          await root.getDirectoryHandle(folderName);
+          throw new Error(`${folderName} already exists in the selected folder. Choose another repository root or open the existing project.`);
+        } catch (error) {
+          if (error.name !== "NotFoundError") throw error;
+        }
+        target = await root.getDirectoryHandle(folderName, { create: true });
+      }
+      if (state.activePath) {
+        state.files.set(state.activePath, currentText());
+        if (isEntityPath(state.activePath) && !state.files.has(companionPath(state.activePath))) {
+          state.files.set(companionPath(state.activePath), JSON.stringify(entityData(state.activePath), null, 2));
+        }
+      }
+      for (const [path, content] of state.files) await writeDirectoryFile(target, path, content);
+      state.dirHandle = target;
+      project.storage = "folder";
+      await saveDirectoryHandle(target, project.id);
+      persistProjectCatalog();
+      persistBrowserState();
+      updateProjectLabels();
+      notify(`Project copied to ${folderName}/. Commit this folder to sync it with GitHub.`);
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error("Could not copy the browser project into the app folder.", error);
+        notify(`Could not copy project to folder: ${error.message}`);
+      }
+    }
+  }
+
   async function persistProjectModules(project) {
     try {
       const key = `${PROJECT_DATA_PREFIX}${project.id}`;
@@ -855,13 +911,23 @@
     const name = await promptDialog("Create a project", "Project name");
     if (!name) return;
     const project = { id: `project-${crypto.randomUUID()}`, name, storage: "browser", modules: { ideation: false, writing: true, editing: false, publishing: false } };
-    if (useFolder && window.showDirectoryPicker) {
+    if (useFolder && (desktop || window.showDirectoryPicker)) {
       try {
-        const parent = await window.showDirectoryPicker({ mode: "readwrite" });
-        const folder = await parent.getDirectoryHandle(name.replace(/[<>:"/\\|?*]/g, "-"), { create: true });
-        for (const directory of ["Manuscript", "Worldbuilding/Characters", "Worldbuilding/Locations", "Worldbuilding/Factions", "Timelines", "Todos", "Ideation", "Editing", "Publishing"]) {
-          let cursor = folder;
-          for (const segment of directory.split("/")) cursor = await cursor.getDirectoryHandle(segment, { create: true });
+        const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "Untitled Project";
+        const parent = desktop
+          ? await desktop.chooseDirectory("Select where to create the project", "parent")
+          : await window.showDirectoryPicker({ mode: "readwrite" });
+        if (!parent) return;
+        let folder;
+        if (desktop) {
+          folder = await desktop.createProjectFolder(parent.path, safeName);
+          project.folderPath = folder.path;
+        } else {
+          folder = await parent.getDirectoryHandle(safeName, { create: true });
+          for (const directory of ["Manuscript", "Worldbuilding/Characters", "Worldbuilding/Locations", "Worldbuilding/Factions", "Timelines", "Todos", "Ideation", "Editing", "Publishing"]) {
+            let cursor = folder;
+            for (const segment of directory.split("/")) cursor = await cursor.getDirectoryHandle(segment, { create: true });
+          }
         }
         project.storage = "folder";
         await saveDirectoryHandle(folder, project.id);
@@ -925,14 +991,19 @@
     if (project.storage === "folder") {
       const handle = await getDirectoryHandle(project.id);
       if (handle) {
-        let permission = await handle.queryPermission({ mode: "readwrite" });
-        if (permission !== "granted") permission = await handle.requestPermission({ mode: "readwrite" });
-        if (permission !== "granted") {
-          notify("Folder permission was not granted. This project remains available in its browser cache.");
-          project.storage = "browser";
-        } else {
+        if (desktop) {
           state.dirHandle = handle;
           await readDirectory(handle);
+        } else {
+          let permission = await handle.queryPermission({ mode: "readwrite" });
+          if (permission !== "granted") permission = await handle.requestPermission({ mode: "readwrite" });
+          if (permission !== "granted") {
+            notify("Folder permission was not granted. This project remains available in its browser cache.");
+            project.storage = "browser";
+          } else {
+            state.dirHandle = handle;
+            await readDirectory(handle);
+          }
         }
       } else project.storage = "browser";
     }
@@ -967,6 +1038,10 @@
   }
 
   async function getDirectoryHandle(projectId) {
+    if (desktop) {
+      const project = state.projects.find(item => item.id === projectId);
+      return project?.folderPath ? { path: project.folderPath, name: project.name } : null;
+    }
     if (!("indexedDB" in window)) return null;
     const db = await new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, 1);
@@ -1352,6 +1427,7 @@
   }
 
   async function writeDirectoryFile(rootHandle, path, content) {
+    if (desktop) return desktop.writeProjectFile(rootHandle.path, path, content);
     const parts = path.split("/");
     const filename = parts.pop();
     let directory = rootHandle;
@@ -1501,20 +1577,24 @@
   }
 
   async function openVault() {
-    if (!window.showDirectoryPicker) {
+    if (!desktop && !window.showDirectoryPicker) {
       $("#folder-fallback").click();
       return;
     }
     try {
       await saveActiveFile();
-      const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+      const handle = desktop
+        ? await desktop.chooseDirectory("Open an existing project folder", "project")
+        : await window.showDirectoryPicker({ mode: "readwrite" });
+      if (!handle) return;
       state.dirHandle = handle;
       state.importedFolder = false;
       state.files.clear();
       state.tabs = [];
       state.activePath = "";
-      const existing = state.projects.find(project => project.storage === "folder" && project.name === handle.name);
+      const existing = state.projects.find(project => project.storage === "folder" && (desktop ? project.folderPath === handle.path : project.name === handle.name));
       const project = existing || { id: `project-${crypto.randomUUID()}`, name: handle.name, storage: "folder", modules: { ideation: false, writing: true, editing: false, publishing: false } };
+      if (desktop) project.folderPath = handle.path;
       if (!existing) state.projects.push(project);
       state.projectId = project.id;
       await saveDirectoryHandle(handle, project.id);
@@ -1546,6 +1626,11 @@
   }
 
   async function readDirectory(handle, prefix = "") {
+    if (desktop) {
+      if (prefix) return;
+      for (const file of await desktop.readProject(handle.path)) state.files.set(file.path, file.content);
+      return;
+    }
     for await (const [name, entry] of handle.entries()) {
       const path = prefix ? `${prefix}/${name}` : name;
       if (entry.kind === "directory") await readDirectory(entry, path);
@@ -1557,6 +1642,14 @@
   }
 
   async function saveDirectoryHandle(handle, key = "last-vault") {
+    if (desktop) {
+      const project = state.projects.find(item => item.id === key);
+      if (project) {
+        project.folderPath = handle.path;
+        project.storage = "folder";
+      }
+      return;
+    }
     if (!("indexedDB" in window)) return;
     const db = await new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, 1);
@@ -1574,6 +1667,24 @@
   }
 
   async function restoreDirectoryHandle() {
+    if (desktop) {
+      const project = activeProject();
+      if (!project || project.storage !== "folder" || !project.folderPath) return false;
+      state.dirHandle = { path: project.folderPath, name: project.name };
+      state.files.clear();
+      await readDirectory(state.dirHandle);
+      try {
+        const config = JSON.parse(state.files.get("config.json") || "{}");
+        if (config.modules) project.modules = { ...project.modules, ...config.modules };
+      } catch (error) {
+        console.error("Could not parse the restored project's config.json.", error);
+        notify("Project module preferences could not be read.");
+      }
+      if (!project.modules?.[state.currentModule]) state.currentModule = MODULES.find(module => project.modules?.[module.id])?.id || "writing";
+      updateProjectLabels();
+      persistProjectCatalog();
+      return true;
+    }
     if (!("indexedDB" in window)) return false;
     try {
       const db = await new Promise((resolve, reject) => {
@@ -2078,6 +2189,19 @@
   }
 
   function setupEvents() {
+    if (desktop) {
+      $$(".window-control[data-window-action]").forEach(button => {
+        button.addEventListener("click", () => void desktop.controlWindow(button.dataset.windowAction));
+      });
+      $(".window-titlebar-drag").addEventListener("dblclick", () => void desktop.controlWindow("maximize"));
+      desktop.onWindowState(({ maximized }) => {
+        const glyph = $(".maximize-glyph");
+        glyph.classList.toggle("is-restored", maximized);
+        const button = $('[data-window-action="maximize"]');
+        button.title = maximized ? "Restore" : "Maximize";
+        button.setAttribute("aria-label", button.title);
+      });
+    }
     $("#document-content").addEventListener("input", markDirty);
     $("#rich-document-content").addEventListener("input", () => {
       syncRichEditor();
@@ -2476,7 +2600,16 @@
     loadPreferences();
     setupEvents();
     loadProjectCatalog();
-    const restored = await restoreDirectoryHandle();
+    let restored = false;
+    try {
+      restored = await restoreDirectoryHandle();
+    } catch (error) {
+      console.error("Could not restore the active project folder.", error);
+      if (desktop) {
+        setStatus("Project folder unavailable");
+        notify(`Could not open project folder: ${error.message}`);
+      } else throw error;
+    }
     if (restored) {
       restoreMetrics();
       renderAll();

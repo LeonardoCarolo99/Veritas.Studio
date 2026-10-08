@@ -76,6 +76,7 @@ body[data-theme="scifi"] {
   --green: #63d6ad;
 }
 body[data-theme="coffee"] .topbar,
+body[data-theme="coffee"] .window-titlebar,
 body[data-theme="coffee"] .menu-bar,
 body[data-theme="coffee"] .statusbar { background: #261c16; }
 body[data-theme="coffee"] .vault-card,
@@ -90,6 +91,7 @@ body[data-theme="coffee"] .export-card .dialog-actions { background: #281e18; }
 body[data-theme="coffee"] .title-input { color: #f3dfc9; }
 body[data-theme="coffee"] .markdown-editor { color: #e0cbb5; }
 body[data-theme="scifi"] .topbar,
+body[data-theme="scifi"] .window-titlebar,
 body[data-theme="scifi"] .menu-bar,
 body[data-theme="scifi"] .statusbar { background: #0d1522; }
 body[data-theme="scifi"] .vault-card,
@@ -107,6 +109,7 @@ body[data-theme="scifi"] .export-card .dialog-actions { background: #0d1522; }
 body[data-theme="scifi"] .title-input { color: #e4f6ff; }
 body[data-theme="scifi"] .markdown-editor { color: #c7d9e8; }
 body[data-theme="light"] .topbar,
+body[data-theme="light"] .window-titlebar,
 body[data-theme="light"] .menu-bar,
 body[data-theme="light"] .statusbar { background: #dedbd3; }
 body[data-theme="light"] .vault-card,
@@ -148,6 +151,21 @@ body { margin: 0; background: var(--bg); color: var(--text); font-size: 13px; wi
 button, input, textarea { font: inherit; }
 button { color: inherit; cursor: pointer; }
 .app-shell { width: 100%; height: 100%; min-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.window-titlebar { display: none; }
+.desktop-app .window-titlebar { height: 34px; flex: 0 0 34px; display: flex; align-items: stretch; background: #181a1e; border-bottom: 1px solid #272a30; color: #b8bbc1; user-select: none; }
+.window-titlebar-drag { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; padding: 0 12px; -webkit-app-region: drag; }
+.window-titlebar-mark { width: 17px; height: 17px; display: grid; place-items: center; border-radius: 4px 4px 4px 1px; background: var(--accent); color: #17191d; font: 700 11px var(--serif); }
+.window-titlebar-caption { overflow: hidden; color: #b8bbc1; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.window-controls { display: flex; flex: 0 0 auto; -webkit-app-region: no-drag; }
+.window-control { width: 46px; height: 33px; display: grid; place-items: center; border: 0; background: transparent; color: #b8bbc1; }
+.window-control:hover { background: #30333a; color: #fff; }
+.window-close:hover { background: #c42b1c; color: #fff; }
+.window-control span { position: relative; display: block; width: 12px; height: 12px; }
+.minimize-glyph:after { position: absolute; top: 8px; left: 2px; width: 9px; border-top: 1px solid currentColor; content: ""; }
+.maximize-glyph { border: 1px solid currentColor; }
+.maximize-glyph.is-restored:before { position: absolute; top: -3px; left: 3px; width: 8px; height: 8px; border: 1px solid currentColor; background: #181a1e; content: ""; }
+.close-glyph:before,.close-glyph:after { position: absolute; top: 5px; left: 0; width: 13px; border-top: 1px solid currentColor; content: ""; transform: rotate(45deg); }
+.close-glyph:after { transform: rotate(-45deg); }
 .topbar { height: 54px; flex: 0 0 54px; display: flex; align-items: center; padding: 0 22px; gap: 28px; background: #191b1f; }
 .brand { color: var(--text); text-decoration: none; display: flex; gap: 9px; align-items: center; font-weight: 700; font-size: 15px; letter-spacing: -.4px; }
 .brand-mark { width: 25px; height: 25px; display: grid; place-items: center; color: #17191d; background: var(--accent); border-radius: 7px 7px 7px 2px; font: 700 15px var(--serif); }
