@@ -778,7 +778,7 @@
       <header class="modal-heading"><div><span class="eyebrow">WORKSPACES</span><h3 id="project-manager-title">Your projects</h3></div><button class="icon-button small" type="button" data-close-manager aria-label="Close">×</button></header>
       <p class="modal-intro">Keep each novel's manuscript, planning, and module settings in its own workspace.</p>
       <div class="project-manager-list">${projects || '<div class="empty-hint">No projects yet. Create your first writing workspace.</div>'}</div>
-      <footer class="project-manager-actions"><button class="button-secondary" type="button" data-create-project="browser">＋ New browser project</button><button class="button-primary" type="button" data-create-project="folder">＋ New project folder</button><button class="button-secondary" type="button" data-copy-project-to-folder ${currentProject?.storage === "folder" ? "disabled title=\"This project already saves to a folder\"" : ""}>Copy current project into repository root</button><button class="button-secondary" type="button" data-open-project-folder>Open existing folder</button></footer>
+      <footer class="project-manager-actions"><button class="button-secondary" type="button" data-import-project>Import project</button><button class="button-secondary" type="button" data-export-project>Export project</button><button class="button-secondary" type="button" data-create-project="browser">＋ New browser project</button><button class="button-primary" type="button" data-create-project="folder">＋ New project folder</button><button class="button-secondary" type="button" data-copy-project-to-folder ${currentProject?.storage === "folder" ? "disabled title=\"This project already saves to a folder\"" : ""}>Copy current project into repository root</button><button class="button-secondary" type="button" data-open-project-folder>Open project folder…</button></footer>
     </section>`;
     const close = () => backdrop.remove();
     backdrop.addEventListener("click", event => {
@@ -798,6 +798,8 @@
         close();
         void createProject(makeFolder);
       }
+      if (event.target.closest("[data-import-project]")) { close(); chooseProjectImportFile(); }
+      if (event.target.closest("[data-export-project]")) { close(); void exportProject(); }
       if (event.target.closest("[data-copy-project-to-folder]")) { close(); void copyProjectToFolder(); }
       if (event.target.closest("[data-open-project-folder]")) { close(); void openVault(); }
     });
@@ -831,6 +833,120 @@
       persistProjectCatalog();
     });
     document.body.append(backdrop);
+  }
+
+  async function exportProject() {
+    try {
+      clearTimeout(state.saveTimer);
+      await saveActiveFile();
+      if (state.dirty) throw new Error("The current document could not be saved. Resolve the save issue before exporting.");
+      const project = activeProject();
+      if (!project) throw new Error("There is no active project to export.");
+      const bundle = {
+        format: "veritas-studio-project",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        project: { name: project.name, modules: project.modules },
+        snapshot: {
+          dailyGoal: state.dailyGoal,
+          dailyWords: state.dailyWords,
+          dayStartWords: state.dayStartWords,
+          sessionStart: state.sessionStart
+        },
+        files: [...state.files].map(([path, content]) => ({ path, content }))
+      };
+      if (!bundle.files.length) throw new Error("The active project has no files to export.");
+      const filename = `${project.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "Veritas Project"}.veritas.json`;
+      downloadText(filename, JSON.stringify(bundle, null, 2), "application/json");
+    } catch (error) {
+      console.error("Could not export project.", error);
+      notify(`Could not export project: ${error.message}`);
+    }
+  }
+
+  function chooseProjectImportFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".veritas.json,application/json";
+    input.addEventListener("cancel", () => input.remove(), { once: true });
+    input.addEventListener("change", async () => {
+      const [file] = input.files || [];
+      input.remove();
+      if (!file) return;
+      try {
+        const bundle = JSON.parse(await file.text());
+        const { project, snapshot } = createImportedProject(bundle);
+        const storageKey = `${PROJECT_DATA_PREFIX}${project.id}`;
+        localStorage.setItem(storageKey, JSON.stringify(snapshot));
+        state.projects.push(project);
+        try {
+          persistProjectCatalog();
+        } catch (error) {
+          state.projects.pop();
+          localStorage.removeItem(storageKey);
+          throw error;
+        }
+        await switchProject(project.id);
+        notify(`Imported ${project.name}`);
+      } catch (error) {
+        console.error("Could not import project.", error);
+        notify(`Could not import project: ${error.message}`);
+      }
+    }, { once: true });
+    input.click();
+  }
+
+  function createImportedProject(bundle) {
+    if (!bundle || bundle.format !== "veritas-studio-project" || bundle.version !== 1) {
+      throw new Error("This is not a supported Veritas Studio project export.");
+    }
+    if (!bundle.project || typeof bundle.project.name !== "string" || !bundle.project.name.trim()) {
+      throw new Error("The project export has no valid project name.");
+    }
+    if (!Array.isArray(bundle.files) || !bundle.files.length) {
+      throw new Error("The project export contains no project files.");
+    }
+    const files = [];
+    const paths = new Set();
+    for (const file of bundle.files) {
+      if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
+        throw new Error("The project export contains an invalid file entry.");
+      }
+      const segments = file.path.split("/");
+      if (!file.path || file.path.includes("\\") || file.path.includes("\0")
+        || segments.some(segment => !segment || segment === "." || segment === ".."
+          || /[<>:"|?*\u0000-\u001f]/.test(segment) || /[. ]$/.test(segment)
+          || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment))
+        || !/\.(md|json)$/i.test(file.path)) {
+        throw new Error(`The project export contains an unsafe or unsupported file path: ${file.path}`);
+      }
+      if (paths.has(file.path)) throw new Error(`The project export contains a duplicate file path: ${file.path}`);
+      paths.add(file.path);
+      files.push({ path: file.path, content: file.content });
+    }
+    const modules = Object.fromEntries(MODULES.map(module => [
+      module.id,
+      bundle.project.modules?.[module.id] === true
+    ]));
+    if (!Object.values(modules).some(Boolean)) modules.writing = true;
+    const snapshot = bundle.snapshot && typeof bundle.snapshot === "object" ? bundle.snapshot : {};
+    const project = {
+      id: `project-${crypto.randomUUID()}`,
+      name: bundle.project.name.trim(),
+      storage: "browser",
+      modules
+    };
+    return {
+      project,
+      snapshot: {
+        name: project.name,
+        files,
+        dailyGoal: Number.isFinite(Number(snapshot.dailyGoal)) && Number(snapshot.dailyGoal) > 0 ? Number(snapshot.dailyGoal) : DEFAULT_GOAL,
+        dailyWords: Number.isFinite(Number(snapshot.dailyWords)) && Number(snapshot.dailyWords) >= 0 ? Number(snapshot.dailyWords) : 0,
+        dayStartWords: Number.isFinite(Number(snapshot.dayStartWords)) && Number(snapshot.dayStartWords) >= 0 ? Number(snapshot.dayStartWords) : 0,
+        sessionStart: Number.isFinite(Number(snapshot.sessionStart)) && Number(snapshot.sessionStart) > 0 ? Number(snapshot.sessionStart) : Date.now()
+      }
+    };
   }
 
   async function copyProjectToFolder() {
@@ -1954,7 +2070,7 @@
     menu.className = "menu-popover app-menu-popover";
     const actions = {
       File: [
-        ["PROJECTS & VAULT", [["Project manager…", "projects"], ["Open folder as project…", "open-vault"], ["Save current file", "save"]]],
+        ["PROJECTS", [["Project manager…", "projects"], ["Open project folder…", "open-vault"], ["Save current file", "save"]]],
         ["CREATE", [["New chapter", "new-chapter"], ["New character", "new-character"], ["New location", "new-location"], ["New faction", "new-faction"], ["New timeline", "new-timeline"]]]
       ],
       Edit: [
@@ -2231,15 +2347,18 @@
       }
     });
     $("#document-title").addEventListener("input", markDirty);
-    $("#save-vault").addEventListener("click", () => void saveActiveFile());
-    $("#open-vault").addEventListener("click", () => void openVault());
     $("#project-switcher").addEventListener("click", openProjectManager);
     $("#folder-fallback").addEventListener("change", event => readFallbackFiles(event.target.files));
     $("#search-toggle").addEventListener("click", setupSearch);
     $("#menu-toggle").addEventListener("click", () => {
       const collapsed = document.body.classList.toggle("menu-collapsed");
-      $("#menu-toggle").textContent = collapsed ? "⌄" : "⌃";
-      $("#menu-toggle").title = collapsed ? "Show application menu" : "Hide application menu";
+      const toggle = $("#menu-toggle");
+      toggle.innerHTML = collapsed ? "☰ <span>Show menu</span>" : "⌃ <span>Hide menu</span>";
+      toggle.title = collapsed ? "Show application menu" : "Hide application menu";
+      toggle.setAttribute("aria-label", toggle.title);
+      toggle.classList.toggle("menu-toggle-restore", collapsed);
+      if (collapsed) $(".top-actions").insertBefore(toggle, $(".window-controls"));
+      else $("#app-menu-bar").append(toggle);
     });
     $$(".menu-bar-item").forEach(button => button.addEventListener("click", () => showApplicationMenu(button.dataset.appMenu, button)));
     $("#split-horizontal").addEventListener("click", () => setupSplit("horizontal"));
@@ -2350,7 +2469,7 @@
           <section class="settings-page" data-settings-page="vault" hidden><div class="settings-page-heading"><h4>Vault</h4><p>Manage this project's local workspace.</p></div>
             <label class="setting-row vault-name-setting"><span><strong>Project name</strong><small>Displayed in the application header.</small></span><input id="setting-vault-name" type="text"></label>
             <div class="setting-row"><span><strong>Storage</strong><small>Current workspace storage mode.</small></span><span class="storage-badge" id="settings-storage-mode">Browser vault</span></div>
-            <button class="secondary-button" id="settings-open-vault">Choose local vault folder…</button>
+            <button class="secondary-button" id="settings-open-vault">Open project folder…</button>
           </section>
         </div>
       </div>

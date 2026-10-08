@@ -111,4 +111,6 @@ The first release must be published before installed copies can receive updates.
 
 The app's project manager can create or open folders anywhere on the PC. To keep a project in the Veritas Git repository, use **Copy current project into repository root** and select the checkout folder; the new project folder can then be committed and pushed as usual.
 
+Use **Export project** in the project manager to download a `.veritas.json` archive containing the project's Markdown and JSON files, module settings, and writing statistics. On another PC, choose **Import project** and select that archive; Veritas creates a separate browser-backed project without replacing existing projects. The imported project can later be copied into a local folder from the project manager.
+
 The writing surface provides rich editing in the browser while keeping Markdown as the portable, local-first source format. DOCX export maps supported headings, emphasis, quotes, and lists into the exported document.

@@ -1,6 +1,6 @@
 {
   "name": "veritas-studio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A local-first writing studio",
   "main": "electron/main.cjs",
   "author": "LeonardoCarolo99",
