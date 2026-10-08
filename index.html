@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#17191d">
+    <title>Veritas — Writing Studio</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Veritas home">
+          <span class="brand-mark">V</span>
+          <span>veritas<span class="brand-light">.studio</span></span>
+        </a>
+        <button class="project-control project-switcher" id="project-switcher" title="Manage and switch projects">
+          <span class="project-icon">▧</span>
+          <span id="project-name">Untitled Vault</span>
+          <span class="project-chevron">⌄</span>
+          <span class="sync-dot" id="save-indicator" title="All changes saved"></span>
+        </button>
+        <nav class="module-nav" id="module-nav" aria-label="Active project modules"></nav>
+        <div class="top-actions">
+          <button class="icon-button" id="open-vault" title="Open a local vault folder" aria-label="Open vault">⇧</button>
+          <button class="icon-button" id="save-vault" title="Save current file" aria-label="Save">↥</button>
+          <button class="icon-button" id="search-toggle" title="Search vault" aria-label="Search">⌕</button>
+          <button class="icon-button" id="menu-toggle" title="Hide application menu" aria-label="Toggle application menu">⌃</button>
+          <input type="file" id="folder-fallback" webkitdirectory directory multiple hidden>
+        </div>
+      </header>
+      <nav class="menu-bar" id="app-menu-bar" aria-label="Application menu">
+        <button class="menu-bar-item" data-app-menu="File">File</button>
+        <button class="menu-bar-item" data-app-menu="Edit">Edit</button>
+        <button class="menu-bar-item" data-app-menu="Window">Window</button>
+        <button class="menu-bar-item" data-app-menu="Export">Export</button>
+      </nav>
+
+      <div class="workspace">
+        <aside class="dock-column left-column" data-dock="left">
+          <section class="panel binder-panel" data-panel="binder">
+            <div class="panel-heading">
+              <div><span class="eyebrow">YOUR WORKSPACE</span><h2>Project binder</h2></div>
+              <div class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="binder" title="Drag to dock binder" aria-label="Drag to dock binder">⠿</button><button class="icon-button small" data-collapse="left" title="Hide sidebar" aria-label="Hide sidebar">‹</button></div>
+            </div>
+            <div class="vault-card">
+              <span class="vault-glyph">◈</span>
+              <div><strong id="binder-vault-name">Untitled Vault</strong><small id="vault-file-count">Local workspace</small></div>
+              <button class="more-button" id="new-menu" title="Create new item">＋</button>
+            </div>
+            <div class="binder-scroll">
+              <div class="tree-heading"><span>MANUSCRIPT</span><button class="text-button" id="new-chapter" title="New chapter">＋</button></div>
+              <div id="chapter-list" class="tree-list"></div>
+              <div class="tree-heading worldbuilding-heading"><span>WORLDBUILDING</span><button class="text-button" id="new-lore" title="New worldbuilding entry">＋</button></div>
+              <div class="tree-subheading">CHARACTERS</div><div id="character-list" class="tree-list"></div>
+              <div class="tree-subheading">LOCATIONS</div><div id="location-list" class="tree-list"></div>
+              <div class="tree-subheading">FACTIONS</div><div id="faction-list" class="tree-list"></div>
+              <div class="tree-heading"><span>TIMELINES</span><button class="text-button" id="new-timeline">＋</button></div>
+              <div id="timeline-list" class="tree-list"></div>
+            </div>
+            <div class="binder-footer"><span class="keyboard-key">⌘</span> <span class="keyboard-key">P</span><span>Quick switch</span><span class="footer-spacer"></span><button class="icon-button small" id="settings-button" title="Vault settings">⚙</button></div>
+          </section>
+        </aside>
+
+        <main class="dock-column center-column" data-dock="center">
+          <section class="panel editor-panel" data-panel="editor">
+            <div class="editor-topline">
+              <div class="tabs" id="tabs"></div>
+              <div class="editor-actions">
+                <button class="icon-button small" id="split-horizontal" title="Split editor horizontally">⊞</button>
+                <button class="icon-button small" id="split-vertical" title="Split editor vertically">▤</button>
+                <button class="icon-button small" data-collapse="right" title="Toggle inspector" aria-label="Toggle inspector">›</button>
+                <button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="editor" title="Drag to dock editor" aria-label="Drag to dock editor">⠿</button>
+              </div>
+            </div>
+            <div class="editor-breadcrumb" id="breadcrumb">Manuscript <span>›</span> Chapter One</div>
+            <div id="editor-layout" class="editor-layout">
+              <div class="editor-surface">
+                <div class="document-heading">
+                  <span class="document-type" id="document-type">CHAPTER 01</span>
+                  <span class="document-date" id="document-date"></span>
+                </div>
+                <div class="entity-fields" id="entity-fields" hidden></div>
+                <input class="title-input" id="document-title" aria-label="Document title" value="The Cartographer's Silence" spellcheck="true">
+                <div class="format-toolbar" role="toolbar" aria-label="Writing tools">
+                  <button type="button" data-editor-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+                  <button type="button" data-editor-command="redo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+                  <span class="toolbar-divider"></span>
+                  <label class="visually-hidden" for="paragraph-style">Paragraph style</label>
+                  <select id="paragraph-style" aria-label="Paragraph style">
+                    <option value="p">Normal text</option>
+                    <option value="h1">Heading 1</option>
+                    <option value="h2">Heading 2</option>
+                    <option value="h3">Heading 3</option>
+                    <option value="blockquote">Quote</option>
+                  </select>
+                  <span class="toolbar-divider"></span>
+                  <button type="button" data-editor-command="bold" title="Bold (Ctrl+B)" aria-label="Bold"><strong>B</strong></button>
+                  <button type="button" data-editor-command="italic" title="Italic (Ctrl+I)" aria-label="Italic"><em>I</em></button>
+                  <span class="toolbar-divider"></span>
+                  <button type="button" data-editor-command="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list">☷</button>
+                  <button type="button" data-editor-command="insertOrderedList" title="Numbered list" aria-label="Numbered list">1.</button>
+                  <button type="button" data-editor-command="formatBlock" data-command-value="blockquote" title="Quote" aria-label="Quote">❝</button>
+                  <span class="toolbar-divider"></span>
+                  <button type="button" data-open-find title="Find and replace (Ctrl+H)" aria-label="Find and replace">⌕</button>
+                  <span class="editor-save-state" id="editor-save-state" aria-live="polite">Saved</span>
+                </div>
+                <div id="rich-document-content" class="markdown-editor rich-editor" contenteditable="true" role="textbox" aria-label="Document body" aria-multiline="true" spellcheck="true"></div>
+                <textarea id="document-content" hidden aria-hidden="true" tabindex="-1"></textarea>
+                <div class="editor-bottom">
+                  <span id="word-count">0 words</span><span class="editor-dot">·</span><span id="reading-time">1 min read</span>
+                  <span class="editor-bottom-spacer"></span>
+                  <span id="session-count">Today 0 words</span>
+                  <span class="editor-dot">·</span><span>Local-first</span>
+                </div>
+              </div>
+              <div class="split-surface" id="split-surface" hidden>
+                <div class="split-heading"><span>SECOND EDITOR</span><button class="icon-button small" id="close-split" title="Close split">×</button></div>
+                <div id="split-tabs" class="tabs"></div>
+                <textarea id="split-content" class="markdown-editor split-editor" aria-label="Second editor" spellcheck="true"></textarea>
+              </div>
+            </div>
+          </section>
+          <section class="panel lifecycle-view" id="lifecycle-view" hidden></section>
+        </main>
+
+        <aside class="dock-column right-column" data-dock="right">
+          <section class="panel inspector-panel" data-panel="inspector">
+            <div class="panel-heading inspector-heading">
+              <div><span class="eyebrow">DOCUMENT TOOLS</span><h2>Inspector</h2></div>
+              <div class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="inspector" title="Drag to dock inspector" aria-label="Drag to dock inspector">⠿</button><button class="icon-button small" data-collapse="right" title="Hide inspector" aria-label="Hide inspector">›</button></div>
+            </div>
+            <div class="inspector-scroll">
+              <section class="inspector-section">
+                <div class="section-title"><h3>Writing goals</h3><button class="more-button" id="goal-settings" title="Set daily goal">•••</button></div>
+                <div class="goal-card">
+                  <div class="goal-copy"><strong id="goal-progress">0 <span>/ 500</span></strong><small>words today</small></div>
+                  <div class="progress-ring"><span id="goal-percent">0%</span></div>
+                  <div class="progress-track"><span id="goal-bar"></span></div>
+                  <div class="goal-foot"><span>Daily goal</span><button id="change-goal" class="inline-link">Edit goal</button></div>
+                </div>
+              </section>
+              <section class="inspector-section">
+                <div class="section-title"><h3>The Sorth</h3><span class="live-pill"><i></i> LIVE</span></div>
+                <p class="section-caption">Names and places detected in this document.</p>
+                <div id="sorth-results" class="sorth-list"></div>
+              </section>
+              <section class="inspector-section">
+                <div class="section-title"><h3>Document details</h3><button class="more-button" title="More details">•••</button></div>
+                <div class="detail-list">
+                  <div><span>Word count</span><strong id="detail-words">0</strong></div>
+                  <div><span>Characters</span><strong id="detail-characters">0</strong></div>
+                  <div><span>Reading time</span><strong id="detail-reading">1 min</strong></div>
+                  <div><span>Last edited</span><strong id="last-edited">Just now</strong></div>
+                </div>
+              </section>
+              <section class="inspector-section timeline-widget" data-panel="timeline">
+                <div class="section-title"><h3>Story timeline</h3><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="timeline" title="Drag to dock timeline">⠿</button><button class="text-button" id="add-event">＋</button></span></div>
+                <div class="timeline-track" id="timeline-events"></div>
+                <button class="outline-button" id="open-timeline">Open plot planner</button>
+              </section>
+              <section class="inspector-section lore-widget" data-panel="lore">
+                <div class="section-title"><h3>Worldbuilding</h3><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="lore" title="Drag to dock worldbuilding">⠿</button><button class="text-button" id="new-lore-inline">＋</button></span></div>
+                <p class="section-caption">Keep your world's details close at hand.</p>
+                <div id="related-lore" class="related-lore"></div>
+              </section>
+            </div>
+          </section>
+        </aside>
+        <div class="resize-handle left-resize" role="separator" aria-label="Resize project binder" title="Drag to resize binder"></div>
+        <div class="resize-handle right-resize" role="separator" aria-label="Resize inspector" title="Drag to resize inspector"></div>
+      </div>
+
+      <footer class="statusbar">
+        <div><span class="status-led"></span><span id="status-text">Ready to write</span></div>
+        <div class="status-right"><span id="vault-mode">Browser vault</span><span class="status-separator">·</span><span>UTF-8</span><span class="status-separator">·</span><span>Markdown</span></div>
+      </footer>
+      <div class="drop-overlay" id="drop-overlay" hidden>Drop panel to dock</div>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
