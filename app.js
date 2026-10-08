@@ -46,6 +46,8 @@
     saveTimer: null,
     scanTimer: null,
     toastTimer: null,
+    updateState: { status: "idle", version: "" },
+    updateScreenDismissed: false,
     dayStartWords: 0,
     dailyGoal: DEFAULT_GOAL,
     sessionStart: 0,
@@ -186,6 +188,115 @@
     toast.classList.add("show");
     clearTimeout(state.toastTimer);
     state.toastTimer = setTimeout(() => toast.classList.remove("show"), 2300);
+  }
+
+  function updateStatusText(update) {
+    if (update.status === "checking") return "Checking for updates…";
+    if (update.status === "current") return `You're up to date${update.version ? ` (version ${update.version})` : ""}.`;
+    if (update.status === "available") return `Version ${update.version} is available. Preparing the download…`;
+    if (update.status === "downloading") return `Downloading version ${update.version}${Number.isFinite(update.percent) ? ` · ${Math.floor(update.percent)}%` : ""}.`;
+    if (update.status === "downloaded") return `Version ${update.version} is ready to install.`;
+    if (update.status === "error") return `Update failed: ${update.message || "An unexpected error occurred."}`;
+    return "Automatic update checks are available in the installed desktop app.";
+  }
+
+  function showUpdateScreen() {
+    if (!["available", "downloading", "downloaded", "error"].includes(state.updateState.status)) return;
+    state.updateScreenDismissed = false;
+    renderUpdateScreen();
+  }
+
+  function renderUpdateScreen() {
+    const update = state.updateState;
+    const active = ["available", "downloading", "downloaded"].includes(update.status);
+    const progress = Number.isFinite(update.percent) ? Math.max(0, Math.min(100, update.percent)) : 8;
+    let screen = $(".update-screen-backdrop");
+    if (!active && update.status !== "error") {
+      screen?.remove();
+      return;
+    }
+    if (!screen) {
+      screen = document.createElement("div");
+      screen.className = "update-screen-backdrop";
+      screen.innerHTML = `<section class="update-screen" role="dialog" aria-modal="true" aria-labelledby="update-screen-title" aria-describedby="update-screen-description">
+        <div class="update-screen-mark" aria-hidden="true">↻</div>
+        <span class="eyebrow">VERITAS STUDIO</span>
+        <h1 id="update-screen-title"></h1>
+        <p id="update-screen-description"></p>
+        <div class="update-progress-wrap"><div class="update-progress-track" role="progressbar" aria-label="Update download progress" aria-valuemin="0" aria-valuemax="100"><span id="update-progress-bar"></span></div><small id="update-screen-progress"></small></div>
+        <div class="update-screen-actions"><button type="button" class="button-secondary" data-update-continue>Continue writing</button><button type="button" class="button-primary" data-update-install hidden>Restart and install</button></div>
+      </section>`;
+      screen.querySelector("[data-update-continue]").addEventListener("click", () => {
+        state.updateScreenDismissed = true;
+        screen.remove();
+      });
+      screen.querySelector("[data-update-install]").addEventListener("click", async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        button.textContent = "Restarting…";
+        try {
+          await desktop.installUpdate();
+        } catch (error) {
+          console.error("Could not install the downloaded update.", error);
+          button.disabled = false;
+          button.textContent = "Restart and install";
+          notify(`Could not install update: ${error.message}`);
+        }
+      });
+      document.body.append(screen);
+    }
+    const downloaded = update.status === "downloaded";
+    const failed = update.status === "error";
+    $("#update-screen-title", screen).textContent = downloaded
+      ? "Your update is ready"
+      : failed ? "Update couldn’t be completed" : "Veritas is updating";
+    $("#update-screen-description", screen).textContent = downloaded
+      ? `Version ${update.version} has been downloaded and is ready to install.`
+      : failed ? update.message || "An unexpected error occurred while checking for or downloading the update."
+        : `Version ${update.version || ""} is being downloaded. You can keep writing while the update downloads in the background.`;
+    const progressTrack = $(".update-progress-track", screen);
+    const progressBar = $("#update-progress-bar", screen);
+    const progressLabel = $("#update-screen-progress", screen);
+    progressBar.style.width = `${downloaded ? 100 : progress}%`;
+    progressBar.classList.toggle("indeterminate", update.status === "available");
+    if (update.status === "downloading" || downloaded) progressTrack.setAttribute("aria-valuenow", String(Math.round(progress)));
+    else progressTrack.removeAttribute("aria-valuenow");
+    progressLabel.textContent = downloaded
+      ? "Download complete"
+      : update.status === "downloading" && Number.isFinite(update.percent)
+        ? `${Math.floor(update.percent)}%${update.total ? ` · ${formatBytes(update.transferred)} of ${formatBytes(update.total)}` : ""}`
+        : failed ? "You can continue writing and try again later." : "Preparing download…";
+    $(".update-progress-wrap", screen).hidden = failed;
+    progressTrack.hidden = failed;
+    progressLabel.hidden = failed;
+    $("[data-update-install]", screen).hidden = !downloaded;
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+    if (bytes < 1024) return `${Math.round(bytes)} B`;
+    const units = ["KB", "MB", "GB"];
+    let value = bytes / 1024;
+    let unit = units[0];
+    for (let index = 1; value >= 1024 && index < units.length; index++) {
+      value /= 1024;
+      unit = units[index];
+    }
+    return `${value.toFixed(1)} ${unit}`;
+  }
+
+  function applyUpdateState(update, showScreen = true) {
+    if (!update || typeof update.status !== "string") return;
+    state.updateState = update;
+    const status = $("#update-check-status");
+    if (status) status.textContent = updateStatusText(update);
+    const viewButton = $("#view-update-screen");
+    if (viewButton) viewButton.hidden = !["available", "downloading", "downloaded", "error"].includes(update.status);
+    if (showScreen && ["available", "downloading", "downloaded"].includes(update.status) && !state.updateScreenDismissed) {
+      renderUpdateScreen();
+    } else if ($(".update-screen-backdrop")) {
+      renderUpdateScreen();
+    }
   }
 
   function setStatus(message) {
@@ -2448,6 +2559,7 @@
           <button class="settings-nav-item" data-settings-category="writing"><span>✎</span> Writing</button>
           <button class="settings-nav-item" data-settings-category="templates"><span>◇</span> Templates</button>
           <button class="settings-nav-item" data-settings-category="vault"><span>◈</span> Vault</button>
+          <button class="settings-nav-item" data-settings-category="updates"><span>↻</span> Updates</button>
         </nav>
         <div class="settings-content">
           <section class="settings-page" data-settings-page="appearance"><div class="settings-page-heading"><h4>Appearance</h4><p>Set the mood and scale of your writing space.</p></div>
@@ -2470,6 +2582,9 @@
             <label class="setting-row vault-name-setting"><span><strong>Project name</strong><small>Displayed in the application header.</small></span><input id="setting-vault-name" type="text"></label>
             <div class="setting-row"><span><strong>Storage</strong><small>Current workspace storage mode.</small></span><span class="storage-badge" id="settings-storage-mode">Browser vault</span></div>
             <button class="secondary-button" id="settings-open-vault">Open project folder…</button>
+          </section>
+          <section class="settings-page" data-settings-page="updates" hidden><div class="settings-page-heading"><h4>Updates</h4><p>Check for the latest version of Veritas Studio.</p></div>
+            <div class="settings-feature-card update-settings-card"><span class="settings-feature-icon">↻</span><div><strong>Software updates</strong><p>Installed updates download automatically. You can check for a new version at any time.</p><small id="update-check-status" role="status" aria-live="polite">Update checks are available in the installed desktop app.</small></div><div class="update-settings-actions"><button class="primary" id="check-for-updates">Check for updates</button><button class="secondary-button" id="view-update-screen" type="button" hidden>View update</button></div></div>
           </section>
         </div>
       </div>
@@ -2557,7 +2672,32 @@
       }
     });
     $("#settings-storage-mode", backdrop).textContent = state.dirHandle ? "Local folder" : "Browser workspace";
+    if (desktop?.checkForUpdates) applyUpdateState(state.updateState, false);
     $("#settings-open-vault", backdrop).addEventListener("click", () => { backdrop.remove(); void openVault(); });
+    $("#view-update-screen", backdrop).addEventListener("click", showUpdateScreen);
+    $("#check-for-updates", backdrop).addEventListener("click", async event => {
+      const button = event.currentTarget;
+      const status = $("#update-check-status", backdrop);
+      if (!desktop?.checkForUpdates) {
+        status.textContent = "Manual update checks are only available in the installed desktop app.";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "Checking…";
+      status.textContent = "Checking for updates…";
+      try {
+        const result = await desktop.checkForUpdates();
+        if (result.status === "available") status.textContent = `Version ${result.version} found. Downloading in the background.`;
+        else if (result.status === "current") status.textContent = `You're up to date (version ${result.version}).`;
+        else status.textContent = "Update checks are only available in the installed desktop app.";
+      } catch (error) {
+        console.error("Could not check for updates.", error);
+        status.textContent = `Could not check for updates: ${error.message}`;
+      } finally {
+        button.disabled = false;
+        button.textContent = "Check for updates";
+      }
+    });
     $("#open-schema-settings", backdrop).addEventListener("click", () => { backdrop.remove(); openSchemaEditor(); });
     selectPage(initialCategory || state.preferences.settingsCategory || "appearance");
     return backdrop;
@@ -2726,6 +2866,14 @@
   async function init() {
     loadPreferences();
     setupEvents();
+    if (desktop?.onUpdateState) {
+      desktop.onUpdateState(update => applyUpdateState(update));
+      try {
+        applyUpdateState(await desktop.getUpdateState());
+      } catch (error) {
+        console.error("Could not read update status.", error);
+      }
+    }
     loadProjectCatalog();
     let restored = false;
     try {

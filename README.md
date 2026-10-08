@@ -89,7 +89,7 @@ npm start
 npm run dist:win
 ```
 
-The installer is generated in `dist/`. The Windows build uses an NSIS installer and checks GitHub Releases when a packaged app starts and every six hours while it is running. Updates download automatically. When a download is ready, the app offers **Restart now**; choosing **Later** leaves the update ready and installs it automatically the next time the app exits. Running from source does not perform update checks.
+The installer is generated in `dist/`. The Windows build checks GitHub Releases when a packaged app starts and every six hours while it is running; you can also check manually from **Settings → Updates**. Updates download automatically. A dedicated update screen shows download progress and offers to return to writing while the download continues. When the download is ready, restart from that screen to install immediately, or continue using the app and install automatically the next time it exits. Running from source does not perform update checks.
 
 ### Publish a Windows release
 

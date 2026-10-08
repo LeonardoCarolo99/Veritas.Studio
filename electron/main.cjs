@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Notification, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs/promises");
 const path = require("node:path");
@@ -8,6 +8,8 @@ const APP_PAGE = path.join(__dirname, "..", "index.html");
 const APPROVED_ROOTS_FILE = path.join(app.getPath("userData"), "approved-project-folders.json");
 const approvedProjectRoots = new Set();
 const approvedParentRoots = new Set();
+let updateCheckPromise = null;
+let updateState = { status: "idle", version: app.getVersion() };
 
 function assertTrustedSender(event) {
   const frameUrl = event.senderFrame?.url;
@@ -204,30 +206,66 @@ function setupUpdates() {
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on("error", error => console.error("Update check failed.", error));
-  autoUpdater.on("update-available", info => {
-    if (Notification.isSupported()) {
-      new Notification({ title: "Veritas Studio update", body: `Downloading version ${info.version}.` }).show();
+  autoUpdater.on("checking-for-update", () => {
+    if (!["available", "downloading", "downloaded"].includes(updateState.status)) {
+      publishUpdateState({ status: "checking", version: app.getVersion() });
     }
   });
-  autoUpdater.on("update-downloaded", async info => {
-    const result = await dialog.showMessageBox({
-      type: "info",
-      title: "Update ready",
-      message: `Veritas Studio ${info.version} has been downloaded.`,
-      detail: "Restart now to install the update, or install it automatically when you close the app.",
-      buttons: ["Restart now", "Later"],
-      defaultId: 0,
-      cancelId: 1
-    });
-    if (result.response === 0) autoUpdater.quitAndInstall();
+  autoUpdater.on("update-not-available", info => {
+    if (updateState.status !== "downloaded") publishUpdateState({ status: "current", version: info.version });
   });
-  const checkForUpdates = () => {
-    void autoUpdater.checkForUpdates().catch(error => console.error("Could not check for updates.", error));
-  };
+  autoUpdater.on("update-available", info => {
+    publishUpdateState({ status: "available", version: info.version });
+  });
+  autoUpdater.on("download-progress", progress => publishUpdateState({
+    status: "downloading",
+    version: updateState.version,
+    percent: progress.percent,
+    transferred: progress.transferred,
+    total: progress.total,
+    bytesPerSecond: progress.bytesPerSecond
+  }));
+  autoUpdater.on("update-downloaded", info => publishUpdateState({ status: "downloaded", version: info.version, percent: 100 }));
+  autoUpdater.on("update-cancelled", info => publishUpdateState({
+    status: "error",
+    version: info.version,
+    message: "The update download was cancelled."
+  }));
+  autoUpdater.on("error", error => {
+    console.error("Update check failed.", error);
+    publishUpdateState({ status: "error", version: updateState.version, message: error.message });
+  });
+  const checkForUpdates = () => void performUpdateCheck().catch(error => console.error("Could not check for updates.", error));
   checkForUpdates();
   setInterval(checkForUpdates, 6 * 60 * 60 * 1000);
 }
+
+function publishUpdateState(nextState) {
+  updateState = { ...updateState, ...nextState };
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send("veritas:update-state", updateState);
+  }
+}
+
+async function performUpdateCheck() {
+  if (!app.isPackaged) return { status: "unavailable", version: app.getVersion() };
+  if (!updateCheckPromise) {
+    updateCheckPromise = autoUpdater.checkForUpdates()
+      .then(result => ({
+        status: result?.isUpdateAvailable ? "available" : "current",
+        version: result?.updateInfo?.version || app.getVersion()
+      }))
+      .finally(() => { updateCheckPromise = null; });
+  }
+  return updateCheckPromise;
+}
+
+registerHandler("veritas:check-for-updates", performUpdateCheck);
+registerHandler("veritas:get-update-state", () => updateState);
+registerHandler("veritas:install-update", () => {
+  if (updateState.status !== "downloaded") throw new Error("The update has not finished downloading.");
+  autoUpdater.quitAndInstall();
+});
 
 async function restoreApprovedRoots() {
   try {
