@@ -79,7 +79,7 @@ DOCX export produces a minimal Office Open XML document without a runtime depend
 
 ## Windows application
 
-The Windows app uses Electron and keeps the writing UI shared with the browser version. Its frameless window uses a custom title bar and window controls, with a compact VS Code-inspired desktop layout. The Electron preload bridge exposes only project-folder selection and Markdown/JSON read/write operations; the renderer does not have direct Node.js access. Project folder paths are remembered in Electron's app data, while the project files remain in the selected folders.
+The Windows app uses Electron and keeps the writing UI shared with the browser version. Its frameless window uses a custom title bar, animated window controls, and a Veritas `V` application icon, with a compact VS Code-inspired desktop layout. The Electron preload bridge exposes only project-folder selection and Markdown/JSON read/write operations; the renderer does not have direct Node.js access. Project folder paths are remembered in Electron's app data, while the project files remain in the selected folders.
 
 Requirements: Windows, Node.js 24, and npm.
 

@@ -288,7 +288,6 @@
     const name = activeProject()?.name || "Untitled Project";
     $("#project-name").textContent = name;
     $("#binder-vault-name").textContent = name;
-    $("#window-titlebar-caption").textContent = `${name} — Veritas Studio`;
     $("#vault-mode").textContent = state.dirHandle ? (desktop ? "Windows folder" : "Local folder") : "Browser workspace";
   }
 
@@ -2191,9 +2190,18 @@
   function setupEvents() {
     if (desktop) {
       $$(".window-control[data-window-action]").forEach(button => {
-        button.addEventListener("click", () => void desktop.controlWindow(button.dataset.windowAction));
+        button.addEventListener("click", async () => {
+          if (button.dataset.windowAction === "close" && state.dirty) {
+            clearTimeout(state.saveTimer);
+            await saveActiveFile();
+            if (state.dirty) return;
+          }
+          await desktop.controlWindow(button.dataset.windowAction);
+        });
       });
-      $(".window-titlebar-drag").addEventListener("dblclick", () => void desktop.controlWindow("maximize"));
+      $(".topbar").addEventListener("dblclick", event => {
+        if (event.target === event.currentTarget) void desktop.controlWindow("maximize");
+      });
       desktop.onWindowState(({ maximized }) => {
         const glyph = $(".maximize-glyph");
         glyph.classList.toggle("is-restored", maximized);

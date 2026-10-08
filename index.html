@@ -9,17 +9,6 @@
   </head>
   <body>
     <div class="app-shell">
-      <header class="window-titlebar">
-        <div class="window-titlebar-drag">
-          <span class="window-titlebar-mark" aria-hidden="true">V</span>
-          <span class="window-titlebar-caption" id="window-titlebar-caption">Veritas Studio</span>
-        </div>
-        <div class="window-controls" aria-label="Window controls">
-          <button class="window-control" type="button" data-window-action="minimize" aria-label="Minimize" title="Minimize"><span class="minimize-glyph"></span></button>
-          <button class="window-control" type="button" data-window-action="maximize" aria-label="Maximize" title="Maximize"><span class="maximize-glyph"></span></button>
-          <button class="window-control window-close" type="button" data-window-action="close" aria-label="Close" title="Close"><span class="close-glyph"></span></button>
-        </div>
-      </header>
       <header class="topbar">
         <a class="brand" href="#" aria-label="Veritas home">
           <span class="brand-mark">V</span>
@@ -37,6 +26,11 @@
           <button class="icon-button" id="save-vault" title="Save current file" aria-label="Save">↥</button>
           <button class="icon-button" id="search-toggle" title="Search vault" aria-label="Search">⌕</button>
           <button class="icon-button" id="menu-toggle" title="Hide application menu" aria-label="Toggle application menu">⌃</button>
+          <div class="window-controls" aria-label="Window controls">
+            <button class="window-control" type="button" data-window-action="minimize" aria-label="Minimize" title="Minimize"><span class="minimize-glyph"></span></button>
+            <button class="window-control" type="button" data-window-action="maximize" aria-label="Maximize" title="Maximize"><span class="maximize-glyph"></span></button>
+            <button class="window-control window-close" type="button" data-window-action="close" aria-label="Close" title="Close"><span class="close-glyph"></span></button>
+          </div>
           <input type="file" id="folder-fallback" webkitdirectory directory multiple hidden>
         </div>
       </header>
