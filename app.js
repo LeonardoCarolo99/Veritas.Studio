@@ -2354,7 +2354,7 @@
           </section>
         </div>
       </div>
-      <footer class="settings-footer"><span>Preferences are saved on this device.</span><button class="primary" data-close-settings>Done</button></footer>
+      <footer class="settings-footer"><span>Preferences are saved on this device.</span><button class="primary settings-done-button" type="button" data-close-settings><span aria-hidden="true">✓</span>Done</button></footer>
     </section>`;
     document.body.append(backdrop);
     const selectPage = name => {

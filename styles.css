@@ -439,6 +439,10 @@ body[data-editor-width="wide"] { --editor-max-width: 1120px; }
 .storage-badge { border-radius: 12px; padding: 5px 8px; color: #a8c2a4; background: #2b342c; font-size: 9px; }
 .secondary-button { margin-top: 14px; }
 .settings-footer { flex: 0 0 66px; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; border-top: 1px solid #363a42; color: #858b95; font-size: 11px; }
+.settings-footer .settings-done-button { min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #17191d; font: 600 12px var(--sans); box-shadow: 0 2px 8px color-mix(in srgb,var(--accent) 22%,transparent); transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.settings-footer .settings-done-button:hover { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 4px 12px color-mix(in srgb,var(--accent) 30%,transparent); transform: translateY(-1px); }
+.settings-footer .settings-done-button:active { transform: translateY(0); }
+.settings-footer .settings-done-button:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
 .dialog-backdrop { position: fixed; inset: 0; z-index: 30; background: #000a; display: grid; place-items: center; }
 .dialog-card { width: min(410px, 90vw); background: #23262c; border: 1px solid #41454c; border-radius: 8px; padding: 20px; box-shadow: 0 20px 60px #0009; }
 .dialog-card h3 { margin: 0 0 9px; font: 600 18px var(--serif); }
