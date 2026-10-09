@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" fill="none">
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1200" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17191D"/>
+      <stop offset=".58" stop-color="#202127"/>
+      <stop offset="1" stop-color="#17191D"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="430" y1="56" x2="1040" y2="310" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E1C997"/>
+      <stop offset=".55" stop-color="#C6A875"/>
+      <stop offset="1" stop-color="#8F7854"/>
+    </linearGradient>
+    <linearGradient id="page" x1="676" y1="102" x2="925" y2="279" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C6A875" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#C6A875" stop-opacity=".015"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(0 214 -325 0 836 163)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C6A875" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#C6A875" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grain" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="3" r=".7" fill="#F3E9D6" fill-opacity=".13"/>
+      <circle cx="22" cy="17" r=".55" fill="#F3E9D6" fill-opacity=".1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="340" rx="18" fill="url(#backdrop)"/>
+  <rect width="1200" height="340" rx="18" fill="url(#glow)"/>
+  <g stroke="url(#gold)" stroke-opacity=".2">
+    <path d="M524 372C633 261 621 106 768 28c105-56 252-28 350 16"/>
+    <path d="M558 372C664 265 657 122 787 53c99-52 227-33 328 10"/>
+    <path d="M592 372c103-103 100-231 212-292 92-50 205-37 304 5"/>
+    <path d="M929 372c-70-71-80-179-8-258 62-68 172-82 289-39"/>
+    <path d="M967 372c-59-68-68-163-4-229 58-59 146-70 247-35"/>
+    <path d="M1001 372c-47-63-52-144 3-199 49-49 119-57 206-32"/>
+  </g>
+  <g opacity=".7" stroke="#C6A875" stroke-opacity=".35">
+    <path d="M54 54h64M54 64h34M54 276h42M54 286h70"/>
+    <path d="M1145 55v38M1155 55v20M1135 285v-30M1145 285v-16"/>
+  </g>
+  <g fill="#E1C997">
+    <circle cx="532" cy="89" r="1.6" opacity=".7"/>
+    <circle cx="620" cy="53" r="1.1" opacity=".5"/>
+    <circle cx="1000" cy="75" r="1.4" opacity=".72"/>
+    <circle cx="1080" cy="128" r="1" opacity=".54"/>
+    <circle cx="1045" cy="260" r="1.7" opacity=".62"/>
+    <circle cx="617" cy="278" r="1.2" opacity=".58"/>
+    <circle cx="1100" cy="213" r="1" opacity=".65"/>
+  </g>
+  <g transform="translate(683 78)">
+    <path d="M0 24c40-15 79-12 118 8v166c-38-19-78-23-118-10V24Z" fill="url(#page)" stroke="url(#gold)" stroke-width="1.6"/>
+    <path d="M236 24c-40-15-79-12-118 8v166c38-19 78-23 118-10V24Z" fill="url(#page)" stroke="url(#gold)" stroke-width="1.6"/>
+    <path d="M118 32v166" stroke="url(#gold)" stroke-opacity=".72"/>
+    <g stroke="#E1C997" stroke-linecap="round" stroke-opacity=".38">
+      <path d="M20 51c26-7 48-6 75 3"/>
+      <path d="M20 68c26-7 48-6 75 3"/>
+      <path d="M20 85c26-7 48-6 75 3"/>
+      <path d="M20 102c26-7 48-6 75 3"/>
+      <path d="M20 119c26-7 48-6 75 3"/>
+      <path d="M141 54c27-9 49-10 75-3"/>
+      <path d="M141 71c27-9 49-10 75-3"/>
+      <path d="M141 88c27-9 49-10 75-3"/>
+      <path d="M141 105c27-9 49-10 75-3"/>
+      <path d="M141 122c27-9 49-10 75-3"/>
+    </g>
+    <path d="M0 24c-15-10-25-23-28-38M236 24c15-10 25-23 28-38" stroke="url(#gold)" stroke-opacity=".45"/>
+    <path d="M-31-20c34 4 50 19 54 45M267-20c-34 4-50 19-54 45" stroke="url(#gold)" stroke-opacity=".3"/>
+  </g>
+  <g transform="translate(101 100)">
+    <rect width="70" height="70" rx="17" fill="#C6A875" fill-opacity=".11" stroke="#C6A875" stroke-opacity=".48"/>
+    <path d="M18 52 34.7 17h5.1L57 52h-8l-3.5-8.2H29.2L25.7 52H18Zm14.1-14.5h10.9l-5.4-13-5.5 13Z" fill="#E1C997"/>
+  </g>
+  <rect width="1200" height="340" rx="18" fill="url(#grain)" opacity=".28"/>
+  <rect x=".5" y=".5" width="1199" height="339" rx="17.5" stroke="#D6C39E" stroke-opacity=".13"/>
+</svg>

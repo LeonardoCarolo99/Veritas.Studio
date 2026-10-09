@@ -1,116 +1,202 @@
-# Veritas Studio
+<div align="center">
 
-A local-first writing studio starter built with plain HTML, CSS, and JavaScript. The source is intentionally framework-free so it can be hosted locally or embedded in an Electron/Tauri shell without changing the UI layer.
+<img src="assets/readme-banner.svg" alt="Veritas Studio: an open book in a quiet, warm-lit writing space" width="100%">
 
-## Run in a browser
+# Make room for the story.
 
-Open `index.html` in a modern browser. For direct folder access, serve the app from `localhost` (for example, with VS Code Live Server) or package it with Electron/Tauri; the browser File System Access API is available in secure contexts and is not supported by every browser. Use **Open vault** to choose a local folder. The app reads and writes `.md` and `.json` files in that folder and remembers the folder handle when browser permissions allow it.
+**A writing studio for the whole book—from the first loose idea to the final export.**
 
-If folder access is unavailable, the app uses a local browser vault stored in `localStorage`. Browser storage is specific to that browser and device and is not included when you commit the app to GitHub.
+Write in a calm, focused workspace. Keep your manuscript, world, plot, revisions, and publishing plans together—and keep your files yours.
 
-### Sync project data with GitHub
+<br>
 
-To keep your manuscripts and planning files alongside the app in its Git repository:
+[![Windows](https://img.shields.io/badge/Windows-desktop-777f91?style=flat-square&logo=windows)](#windows-desktop)
+[![Electron](https://img.shields.io/badge/Electron-44-777f91?style=flat-square&logo=electron)](#windows-desktop)
+[![Markdown](https://img.shields.io/badge/Manuscripts-Markdown-c6a875?style=flat-square&logo=markdown&logoColor=17191d)](#your-work-stays-yours)
+![JavaScript](https://img.shields.io/badge/Frontend-vanilla%20JavaScript-777f91?style=flat-square&logo=javascript)
 
-1. Open the project switcher and choose **Copy current project into repository root**.
-2. When prompted, select the root folder of your Veritas Studio Git checkout. Veritas copies the current browser project into a new `<project-name>/` folder directly in that root, keeping the original browser copy intact.
-3. Commit and push the new project folder to GitHub.
-4. On another PC, pull or clone the repository, run Veritas, choose **Open existing folder** in the project switcher, and select that same `<project-name>/` folder.
-5. After editing, commit and push the changed data files; pull those changes on the other PC before continuing there.
+<br>
 
-Folder-backed projects save changes directly to their Markdown and JSON files. GitHub does not sync browser permissions or resolve simultaneous edits, so avoid editing the same project on both PCs before syncing.
+[Get started](#get-started) · [Explore the studio](#inside-the-studio) · [Keep projects in Git](#your-work-stays-yours) · [Build for Windows](#windows-desktop)
 
-## Vault layout
+</div>
 
-The starter browser vault includes:
+<br>
 
-```text
-Manuscript/
-Worldbuilding/
-  Characters/
-  Locations/
-  Factions/
-Timelines/
-Todos/
-config.json
-```
+> [!NOTE]
+> Veritas Studio is a local-first writing app. The Windows desktop app is powered by Electron; the same writing interface can also run in a modern browser.
 
-When copied into the app folder for GitHub sync, the project folder sits directly in the repository root as `<project-name>/`; its manuscript, worldbuilding, plot, and other files live inside that project folder. New projects are managed from the project switcher beside the Veritas logo. **New browser project** creates an isolated browser-local workspace. **New project folder** asks for a parent folder and creates a fresh project directory with a scaffold for manuscript, worldbuilding, ideation, editing, publishing, and plot-planner data. **Copy current project into repository root** copies a browser workspace into a new project folder in the selected repository root. **Open existing folder** adds an existing local vault as a project. Each project has its own files, module selection, and writing statistics; folder handles are remembered when the browser grants persistent access.
+## Your story, in one considered workspace
 
-## Lifecycle modules
+Long-form writing rarely happens in one place. Drafts end up in one folder, character notes in another, and the shape of the story somewhere in between. Veritas brings those parts into a single studio without locking your manuscript into a proprietary format.
 
-Projects can enable only the stages they need from the project manager. The active stages appear as navigation buttons in the binder:
+| **Write** | **Build** | **Finish** |
+|:---|:---|:---|
+| A rich manuscript editor with Markdown at its core, autosave, word counts, reading time, and daily goals. | A project binder for chapters and worldbuilding, plus a visual planner for threads, events, and arcs. | Revision snapshots, checklists, book metadata, launch planning, and exports for the formats you need. |
 
-- **Ideation** stores a logline, premise, and conceptual notes in `Ideation/ideas.json`.
-- **Writing** provides the manuscript and worldbuilding binder, editor, and visual plot planner.
-- **Editing** stores named manuscript snapshots and revision checklists in `Editing/revisions.json`.
-- **Publishing** provides a catalog and per-book profitability dashboard, tracks expenses and earnings in `Publishing/portfolio.json`, and keeps book metadata, blurbs, elevator pitches, author bio, launch notes, and a release checklist in the Publishing workspace (`Publishing/launch.json` retains the launch notes and checklist).
+## Inside the studio
 
-At least one module must remain enabled. New projects start with Writing enabled and the other stages off; modules can be enabled at any time without moving project files.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-The **To-do** view is available in every project, regardless of enabled lifecycle modules. Tasks are stored in `Todos/tasks.json`.
+### ✍️ A writing space that stays out of the way
 
-## Plot planner
+- Rich editing for headings, emphasis, quotations, and lists
+- Manuscript files remain portable Markdown
+- Daily word goals, live word count, and reading-time estimates
+- Find and replace, undo and redo, and split-editor views
+- Themes, editor sizing, and a focused, adjustable workspace
 
-Open **Plot planner** from the Writing module navigation or the Inspector. Add plot threads, event blocks, and story arcs; switch between Surface and Shadow layers; filter to a single thread; and drag event blocks along the story or into another thread. Structured planner data is stored in `Timelines/Plot planner.json`, separately from the simple Markdown timeline notes.
+</td>
+<td width="50%" valign="top">
 
-New chapter, character, location, faction, and timeline actions create files in the corresponding folders. Worldbuilding entries are paired Markdown notes and JSON metadata files; their structured fields are configured in the entity schema editor and stored under `schemas` in `config.json`. The timeline panel reads and writes simple `- marker | event` entries.
+### 🗺️ A world with room to grow
 
-## Included features
+- A binder for chapters, characters, locations, factions, and timelines
+- Structured worldbuilding fields with editable templates
+- **The Sorth** surfaces worldbuilding notes mentioned in your draft
+- A plot planner for story threads, events, arcs, and Surface/Shadow layers
+- Vault-wide search to find the detail you know you wrote
 
-- File/Edit/Window/Export menu bar, chapter-level and full-manuscript export, collapsible/resizable sidebars, and handle-only panel docking
-- Dedicated Manuscript and Worldbuilding binder trees, with character/location/faction templates and JSON-backed structured fields
-- Add custom text, number, dropdown, and long-text template fields in the entity schema editor
-- Categorized application menus, an export settings dialog, and persistent theme/editor/writing/vault preferences
-- Settings categories for appearance (Midnight, Paper, Sepia, Coffee, and Sci-Fi themes), interface scaling, editor size/width, writing goals, entity templates, and vault details
-- Isolated multi-project workspaces with browser-local storage or newly created/opened local folders
-- Per-project progressive disclosure for Ideation, Writing, Editing, and Publishing lifecycle modules
-- A publishing studio with per-book ISBN and release metadata, marketing copy, expense and earnings ledgers, and portfolio-level profit reporting
-- A visual story planner with plot threads, event blocks, Surface/Shadow layers, and ranged story arcs
-- A project-scoped to-do list with task completion and deletion
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-The Export menu opens a desktop-sized settings dialog where the user can choose the current document, a specific chapter, or the full manuscript; choose DOCX, print-to-PDF, or Markdown; and configure title pages and chapter page breaks.
-- Rich-text manuscript editor with paragraph styles, headings, emphasis, quotes, ordered and unordered lists, undo/redo, find and replace, paste sanitization, live word count, reading time, and a daily goal; documents continue to save as Markdown
-- The Sorth scanner links worldbuilding notes mentioned in the current document
-- Vault-wide search and Markdown, DOCX, and print-to-PDF export
-- Local autosave, folder permission restoration, and a browser-only fallback
+### 🪶 From first thought to final draft
 
-DOCX export produces a minimal Office Open XML document without a runtime dependency. PDF export opens the system/browser print dialog; choose **Save as PDF** there.
+Turn on only the parts of the process you need:
 
-## Windows application
+**Ideation** for loglines and premises · **Writing** for manuscripts and story planning · **Editing** for snapshots and revision checklists · **Publishing** for book details, marketing, launch planning, and finances.
 
-The Windows app uses Electron and keeps the writing UI shared with the browser version. Its frameless window uses a custom title bar, animated window controls, and a Veritas `V` application icon, with a compact VS Code-inspired desktop layout. The Electron preload bridge exposes only project-folder selection and Markdown/JSON read/write operations; the renderer does not have direct Node.js access. Project folder paths are remembered in Electron's app data, while the project files remain in the selected folders.
+</td>
+<td width="50%" valign="top">
 
-Requirements: Windows, Node.js 24, and npm.
+### 📚 Take the work with you
+
+- Export a document, a chapter, or the full manuscript
+- Choose Markdown, DOCX, or print-to-PDF
+- Configure title pages and chapter page breaks
+- Export and import a complete project archive
+- Keep a simple project-scoped to-do list close at hand
+
+</td>
+</tr>
+</table>
+
+## Get started
+
+### Run in a browser
+
+Open `index.html` in a modern browser. For direct access to a project folder, serve the app from `localhost` (for example, with VS Code Live Server); browser folder access requires a supported browser and a secure context. Choose **Open vault** to work in a folder.
+
+If folder access is unavailable, Veritas uses a browser-local vault. Browser-local projects are stored in that browser on that device; they are not automatically included in a Git checkout.
+
+### Run the Windows desktop app
+
+**Requirements:** Windows, Node.js 24, and npm.
 
 ```powershell
+git clone https://github.com/LeonardoCarolo99/Veritas.Studio.git
+cd Veritas.Studio
 npm ci
 npm start
+```
+
+To build a Windows installer:
+
+```powershell
 npm run dist:win
 ```
 
-The installer is generated in `dist/`. The Windows build checks GitHub Releases when a packaged app starts and every six hours while it is running; you can also check manually from **Settings → Updates**. Updates download automatically. A dedicated update screen shows download progress and offers to return to writing while the download continues. When the download is ready, restart from that screen to install immediately, or continue using the app and install automatically the next time it exits. Running from source does not perform update checks.
+The installer is written to `dist/`. The packaged app checks GitHub Releases for updates at startup and periodically while running. You can also check from **Settings → Updates**. Running from source does not perform update checks.
 
-### Publish a Windows release
+## Your work stays yours
 
-The GitHub Actions workflow `.github/workflows/release-windows.yml` builds and publishes a Windows installer whenever a version tag is pushed:
+Veritas stores manuscript content as Markdown and project details as JSON. Choose the project home that suits you:
 
-1. Set the version in `package.json` and commit the change.
-2. Create a matching version tag, such as `v1.0.1` for package version `1.0.1`, and push the tag.
-3. The workflow publishes the installer and updater metadata (`latest.yml`) to a GitHub Release. Keep the release publicly accessible so installed apps can find it.
+- **Browser vault:** stored locally in your browser.
+- **Folder-backed project:** files are read and written directly in a folder you choose.
+- **Project archive:** export a `.veritas.json` archive, then import it on another device.
 
-For example:
+### Keep a project in Git
 
-```powershell
-git tag v1.0.1
-git push origin main
-git push origin v1.0.1
+1. Open the project switcher and choose **Copy current project into repository root**.
+2. Select the root of your Veritas Studio checkout. The app creates a new `<project-name>/` folder and leaves the browser project intact.
+3. Commit and push that project folder:
+
+   ```powershell
+   git add "<project-name>"
+   git commit -m "Add writing project"
+   git push
+   ```
+
+4. On another PC, pull or clone the repository, start Veritas, choose **Open existing folder**, and select the project folder.
+5. After editing, commit and push the updated project files. Pull those changes on the other PC before continuing there.
+
+> [!IMPORTANT]
+> Git syncs the project files—not browser permissions—and does not resolve simultaneous edits. Sync before switching devices, and avoid editing the same project on two PCs at once.
+
+## A project shaped around your process
+
+Enable the lifecycle modules that are useful to you from the project manager. You can change them later without moving your project files.
+
+| Module | What it holds |
+|:---|:---|
+| **Ideation** | Logline, premise, and conceptual notes |
+| **Writing** | Manuscript, worldbuilding binder, and plot planner |
+| **Editing** | Named manuscript snapshots and revision checklists |
+| **Publishing** | Book metadata, marketing copy, launch checklist, income, and expenses |
+| **To-do** | Small next steps for the current project |
+
+Each project keeps its own files, enabled modules, and writing statistics. A new project starts with Writing enabled.
+
+### Project files at a glance
+
+```text
+My Novel/
+├── Manuscript/       Chapters and notes (.md)
+├── Worldbuilding/    Characters, locations, and factions
+├── Timelines/        Timeline notes and plot planner data
+├── Todos/            Project tasks
+├── Ideation/         Premise and concept notes
+├── Editing/          Revision data and checklists
+├── Publishing/       Book, launch, and portfolio data
+└── config.json       Project settings and writing goals
 ```
 
-The first release must be published before installed copies can receive updates. GitHub Releases are the update channel; branch pushes alone do not update installed apps. The update check compares the installed app version with the latest published release and downloads a newer version when available. A Windows code-signing certificate is recommended for a smoother installation experience and fewer SmartScreen warnings.
+## Windows desktop
 
-The app's project manager can create or open folders anywhere on the PC. To keep a project in the Veritas Git repository, use **Copy current project into repository root** and select the checkout folder; the new project folder can then be committed and pushed as usual.
+The Electron app wraps the shared writing interface in a frameless Windows window with custom controls and an application menu. Its preload bridge provides the renderer with project-folder selection and Markdown/JSON file operations; Node.js integration is disabled in the renderer.
 
-Use **Export project** in the project manager to download a `.veritas.json` archive containing the project's Markdown and JSON files, module settings, and writing statistics. On another PC, choose **Import project** and select that archive; Veritas creates a separate browser-backed project without replacing existing projects. The imported project can later be copied into a local folder from the project manager.
+### Publish a release
 
-The writing surface provides rich editing in the browser while keeping Markdown as the portable, local-first source format. DOCX export maps supported headings, emphasis, quotes, and lists into the exported document.
+The GitHub Actions workflow at `.github/workflows/release-windows.yml` builds and publishes a Windows installer when a version tag is pushed.
+
+1. Update the version in `package.json` and commit the change.
+2. Create and push a matching version tag. For package version `1.0.7`, the tag would be `v1.0.7`.
+
+   ```powershell
+   git tag v1.0.7
+   git push origin main
+   git push origin v1.0.7
+   ```
+
+The first release must be published before installed copies can receive updates. Branch pushes alone do not update installed apps. A Windows code-signing certificate is recommended to provide a smoother installation experience.
+
+## Built with
+
+**HTML · CSS · JavaScript · Electron**
+
+The interface is framework-free, and manuscript content stays in plain Markdown. DOCX export is generated without a runtime dependency; PDF export uses the system print dialog.
+
+---
+
+<div align="center">
+
+**Keep the notes. Find the thread. Write the next page.**
+
+<sub>Veritas Studio · A local-first writing workspace</sub>
+
+</div>
