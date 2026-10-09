@@ -78,7 +78,6 @@ body[data-theme="scifi"] {
 body[data-theme="coffee"] .topbar,
 body[data-theme="coffee"] .menu-bar,
 body[data-theme="coffee"] .statusbar { background: #261c16; }
-body[data-theme="coffee"] .vault-card,
 body[data-theme="coffee"] .goal-card,
 body[data-theme="coffee"] .entity-fields { background: #35271e; }
 body[data-theme="coffee"] .settings-dialog,
@@ -92,7 +91,6 @@ body[data-theme="coffee"] .markdown-editor { color: #e0cbb5; }
 body[data-theme="scifi"] .topbar,
 body[data-theme="scifi"] .menu-bar,
 body[data-theme="scifi"] .statusbar { background: #0d1522; }
-body[data-theme="scifi"] .vault-card,
 body[data-theme="scifi"] .goal-card,
 body[data-theme="scifi"] .entity-fields { background: #172338; }
 body[data-theme="scifi"] .panel,
@@ -109,7 +107,6 @@ body[data-theme="scifi"] .markdown-editor { color: #c7d9e8; }
 body[data-theme="light"] .topbar,
 body[data-theme="light"] .menu-bar,
 body[data-theme="light"] .statusbar { background: #dedbd3; }
-body[data-theme="light"] .vault-card,
 body[data-theme="light"] .goal-card,
 body[data-theme="light"] .entity-fields,
 body[data-theme="light"] .sorth-item { background: #ebe8e1; }
@@ -204,12 +201,10 @@ button { color: inherit; cursor: pointer; }
 .panel-heading { height: 62px; padding: 13px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .eyebrow,.tree-heading,.document-type,.split-heading { font: 500 9px var(--mono); letter-spacing: 1.15px; color: var(--muted); }
 h2 { font-size: 14px; line-height: 1; margin: 5px 0 0; font-weight: 600; }
-.vault-card { margin: 12px 12px 8px; padding: 10px; border: 1px solid #343841; background: #24272d; border-radius: 6px; display: flex; align-items: center; gap: 10px; }
-.vault-glyph { font-size: 17px; color: var(--accent); }
-.vault-card div { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.vault-card strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; font-weight: 600; }
-.vault-card small { color: var(--muted); font-size: 10px; }
-.more-button { font-weight: 600; letter-spacing: 1px; padding: 4px; border-radius: 4px; }
+.binder-add-button { min-height: 40px; margin: 12px 12px 8px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #17191d; font-size: 12px; font-weight: 700; transition: background-color 130ms ease, border-color 130ms ease, transform 130ms ease; }
+.binder-add-button:hover { border-color: var(--accent-bright); background: var(--accent-bright); }
+.binder-add-button:active { transform: translateY(1px); }
+.binder-add-button span { font-size: 18px; line-height: 1; }
 .binder-scroll,.inspector-scroll { overflow: auto; flex: 1; scrollbar-color: #444850 transparent; scrollbar-width: thin; }
 .tree-heading { display: flex; align-items: center; justify-content: space-between; padding: 15px 16px 7px; font-size: 9px; }
 .worldbuilding-heading { border-top: 1px solid #2c3036; margin-top: 5px; padding-top: 14px; }

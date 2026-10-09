@@ -400,7 +400,6 @@
   function updateProjectLabels() {
     const name = activeProject()?.name || "Untitled Project";
     $("#project-name").textContent = name;
-    $("#binder-vault-name").textContent = name;
     $("#vault-mode").textContent = state.dirHandle ? (desktop ? "Windows folder" : "Local folder") : "Browser workspace";
   }
 
@@ -534,7 +533,6 @@
     state.files.set(path, content);
     persistBrowserState();
     await writeVaultFileIfMounted(path, content);
-    $("#vault-file-count").textContent = `${state.files.size} local files`;
   }
 
   function modulePage(moduleId, title, intro, actions = "") {
@@ -1096,7 +1094,6 @@
     renderBinder();
     renderTimeline();
     renderRelatedLore();
-    $("#vault-file-count").textContent = `${state.files.size} local files`;
     renderModuleNavigation();
     applyModuleVisibility();
   }
@@ -2199,7 +2196,6 @@
         if (complete === pending.length) {
           const folderName = pending[0].webkitRelativePath?.split("/")[0] || "Local Vault";
           $("#project-name").textContent = folderName;
-          $("#binder-vault-name").textContent = folderName;
           $("#vault-mode").textContent = "Imported browser vault";
           state.dirHandle = null;
           state.importedFolder = true;
@@ -2886,7 +2882,6 @@
       const value = vaultName.value.trim();
       if (!value) { vaultName.value = $("#project-name").textContent; return; }
       $("#project-name").textContent = value;
-      $("#binder-vault-name").textContent = value;
       const project = activeProject();
       if (project) project.name = value;
       persistProjectCatalog();
