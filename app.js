@@ -63,6 +63,8 @@
     plotLayer: "surface",
     plotThread: "all",
     publishingTab: "overview",
+    ideationTab: "seed",
+    proofreadPath: "",
     editorSelection: null,
     plannerDragging: null,
     preferences: {
@@ -540,25 +542,254 @@
     return `<header class="lifecycle-header"><div><span class="eyebrow">${module?.name.toUpperCase() || "WRITING"}</span><h1>${title}</h1><p>${intro}</p></div><div class="lifecycle-actions">${actions}</div></header><div class="lifecycle-content">`;
   }
 
+  function compressMoodboardImage(file) {
+    if (!file.type.startsWith("image/")) return Promise.reject(new Error("Choose an image file."));
+    if (file.size > 20 * 1024 * 1024) return Promise.reject(new Error("Choose an image smaller than 20 MB."));
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error("Could not read the image file."));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error("This image could not be opened."));
+        image.onload = () => {
+          const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const context = canvas.getContext("2d");
+          if (!context) { reject(new Error("Image processing is unavailable.")); return; }
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        image.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function proofreadText(text) {
+    const suggestions = [];
+    const typoMap = { teh: "the", recieve: "receive", seperate: "separate", definately: "definitely", occured: "occurred", untill: "until", enviroment: "environment", wierd: "weird", goverment: "government", acheive: "achieve" };
+    const rules = [
+      { pattern: /\b(teh|recieve|seperate|definately|occured|untill|enviroment|wierd|goverment|acheive)\b/gi, replace: match => {
+        const replacement = typoMap[match.toLowerCase()];
+        if (match === match.toUpperCase()) return replacement.toUpperCase();
+        return match[0] === match[0].toUpperCase() ? replacement[0].toUpperCase() + replacement.slice(1) : replacement;
+      }, reason: "Common spelling typo" },
+      { pattern: /\b([\p{L}]{2,})\s+\1\b/giu, replace: match => match.match(/^\S+/)[0], reason: "Repeated word" },
+      { pattern: /[ \t]+([,.;:!?])/g, replace: match => match.trimStart(), reason: "Space before punctuation" },
+      { pattern: /([,;:!?])\1+/g, replace: match => match[0], reason: "Repeated punctuation" }
+    ];
+    rules.forEach(rule => {
+      for (const match of text.matchAll(rule.pattern)) {
+        suggestions.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          match: match[0],
+          replacement: rule.replace(match[0]),
+          contextBefore: text.slice(Math.max(0, match.index - 35), match.index),
+          contextAfter: text.slice(match.index + match[0].length, match.index + match[0].length + 35),
+          reason: rule.reason
+        });
+      }
+    });
+    return suggestions.sort((a, b) => a.start - b.start || a.end - b.end);
+  }
+
+  function renderProofreadResults(container, suggestions) {
+    const results = $("[data-proofread-results]", container);
+    if (!suggestions.length) {
+      results.innerHTML = '<div class="proofread-clear">✓ <span>No suggestions to review. Your manuscript was left untouched.</span></div>';
+      return;
+    }
+    results.innerHTML = suggestions.map((item, index) => {
+      return `<article class="proofread-suggestion"><div><span class="proofread-reason">${escapeHtml(item.reason)}</span><p>Replace <code>${escapeHtml(item.match)}</code> with <code>${escapeHtml(item.replacement)}</code></p><small>…${item.start > item.contextBefore.length ? "…" : ""}${escapeHtml(item.contextBefore)}<mark>${escapeHtml(item.match)}</mark>${escapeHtml(item.contextAfter)}…</small></div><button class="button-secondary" type="button" data-proofread-apply="${index}">Apply</button></article>`;
+    }).join("");
+  }
+
   function renderIdeationModule(container) {
-    const ideas = readJsonFile("Ideation/ideas.json", { logline: "", premise: "", notes: "" });
-    container.innerHTML = `${modulePage("ideation", "The idea room", "Shape the seed of this story before it becomes a manuscript.")}<div class="module-card idea-card"><label>LOGLINE<textarea data-idea-field="logline" placeholder="A protagonist, an impossible goal, and what stands in the way…">${escapeHtml(ideas.logline || "")}</textarea></label><label>PREMISE & CENTRAL QUESTION<textarea data-idea-field="premise" placeholder="What is this story really about?">${escapeHtml(ideas.premise || "")}</textarea></label><label>CONCEPTUAL NOTES<textarea data-idea-field="notes" class="large-notes" placeholder="Capture questions, images, fragments, and possibilities…">${escapeHtml(ideas.notes || "")}</textarea></label><div class="module-save-state" id="module-save-state">Saved locally</div></div></div>`;
+    const source = readJsonFile("Ideation/ideas.json", { logline: "", premise: "", notes: "", cards: [], moodboard: [] });
+    const ideas = {
+      logline: String(source.logline || ""),
+      premise: String(source.premise || ""),
+      notes: String(source.notes || ""),
+      cards: Array.isArray(source.cards) ? source.cards.filter(item => item && typeof item.id === "string") : [],
+      moodboard: Array.isArray(source.moodboard) ? source.moodboard.filter(item => item && typeof item.id === "string" && typeof item.src === "string") : []
+    };
+    const tab = state.ideationTab;
+    const controls = tab === "brainstorm"
+      ? '<button class="button-primary" type="button" data-add-idea-card>＋ Add idea</button>'
+      : tab === "moodboard"
+        ? '<button class="button-secondary" type="button" data-add-mood-url>Add image URL</button><button class="button-primary" type="button" data-add-mood-file>＋ Add image</button>'
+        : "";
+    const body = tab === "seed"
+      ? `<div class="module-card idea-card"><label>LOGLINE<textarea data-idea-field="logline" placeholder="A protagonist, an impossible goal, and what stands in the way…">${escapeHtml(ideas.logline)}</textarea></label><label>PREMISE & CENTRAL QUESTION<textarea data-idea-field="premise" placeholder="What is this story really about?">${escapeHtml(ideas.premise)}</textarea></label><label>CONCEPTUAL NOTES<textarea data-idea-field="notes" class="large-notes" placeholder="Capture questions, images, fragments, and possibilities…">${escapeHtml(ideas.notes)}</textarea></label><div class="module-save-state" data-idea-save-state>Saved locally</div></div>`
+      : tab === "brainstorm"
+        ? `<section class="idea-canvas" aria-label="Brainstorm board" style="--idea-rows:${Math.max(3, Math.ceil(ideas.cards.length / 3))}">${ideas.cards.length ? ideas.cards.map((card, index) => `<article class="idea-note" data-idea-card="${escapeHtml(card.id)}" style="left:${Math.max(0, Math.min(73, Number.isFinite(Number(card.x)) ? Number(card.x) : (4 + index % 3 * 31)))}%;top:${Math.max(0, Number.isFinite(Number(card.y)) ? Number(card.y) : (18 + Math.floor(index / 3) * 210))}px"><div class="idea-note-grip" data-card-grip="${escapeHtml(card.id)}" title="Drag card">⠿ <span>DRAG TO ARRANGE</span><button type="button" data-delete-idea="${escapeHtml(card.id)}" aria-label="Delete idea card">×</button></div><input data-card-title="${escapeHtml(card.id)}" aria-label="Idea title" maxlength="100" placeholder="A spark of an idea…" value="${escapeHtml(String(card.title || ""))}"><textarea data-card-body="${escapeHtml(card.id)}" aria-label="Idea details" placeholder="Explore a scenario, question, image, or possibility…">${escapeHtml(String(card.body || ""))}</textarea></article>`).join("") : '<div class="idea-canvas-empty">Start anywhere. Add a card for a possibility, a scene, a question, or a “what if?”</div>'}</section><div class="module-save-state" data-idea-save-state>Cards save as you work · drag by the handle to rearrange</div>`
+        : `<section class="moodboard-grid">${ideas.moodboard.length ? ideas.moodboard.map(image => `<article class="moodboard-item"><img src="${escapeHtml(image.src)}" alt="${escapeHtml(String(image.caption || "Inspiration reference"))}"><input data-mood-caption="${escapeHtml(image.id)}" aria-label="Image caption" maxlength="180" placeholder="Add a note about this reference…" value="${escapeHtml(String(image.caption || ""))}"><button type="button" data-delete-mood="${escapeHtml(image.id)}" aria-label="Remove inspiration image">Remove</button></article>`).join("") : '<div class="moodboard-empty">Collect colors, imagery, places, textures, and visual references that capture the feeling of your story.</div>'}</section><p class="moodboard-note">Images are kept in this project. Add references you have permission to use.</p><div class="module-save-state" data-idea-save-state>Saved locally</div>`;
+    container.innerHTML = `${modulePage("ideation", "The idea room", "Explore possibilities, collect visual references, and shape the seed of your story.", controls)}<nav class="ideation-tabs" aria-label="Ideation sections">${[["seed", "Story seed"], ["brainstorm", "Brainstorm"], ["moodboard", "Moodboard"]].map(([id, label]) => `<button type="button" data-idea-tab="${id}" class="${tab === id ? "active" : ""}" aria-pressed="${tab === id}">${label}${id === "brainstorm" && ideas.cards.length ? `<span>${ideas.cards.length}</span>` : ""}${id === "moodboard" && ideas.moodboard.length ? `<span>${ideas.moodboard.length}</span>` : ""}</button>`).join("")}</nav><div class="ideation-content">${body}</div></div>`;
+    const saveIdeas = async () => {
+      const indicator = $("[data-idea-save-state]", container);
+      if (indicator) indicator.textContent = "Saving…";
+      await saveJsonFile("Ideation/ideas.json", ideas);
+      if (indicator?.isConnected) indicator.textContent = "Saved locally";
+    };
     let timer;
-    $$("[data-idea-field]", container).forEach(input => input.addEventListener("input", () => {
+    const captureSeedFields = () => {
+      $$("[data-idea-field]", container).forEach(field => { ideas[field.dataset.ideaField] = field.value; });
+    };
+    const flushPendingSave = async () => {
       clearTimeout(timer);
-      $("#module-save-state", container).textContent = "Saving…";
-      timer = setTimeout(async () => {
-        const data = Object.fromEntries($$("[data-idea-field]", container).map(field => [field.dataset.ideaField, field.value]));
-        await saveJsonFile("Ideation/ideas.json", data);
-        $("#module-save-state", container).textContent = "Saved locally";
-      }, 350);
+      captureSeedFields();
+      await saveIdeas();
+    };
+    $$("[data-idea-tab]", container).forEach(button => button.addEventListener("click", async () => {
+      await flushPendingSave();
+      state.ideationTab = button.dataset.ideaTab;
+      renderIdeationModule(container);
+    }));
+    $$("[data-idea-field]", container).forEach(input => input.addEventListener("input", () => {
+      ideas[input.dataset.ideaField] = input.value;
+      clearTimeout(timer);
+      $("[data-idea-save-state]", container).textContent = "Saving…";
+      timer = setTimeout(() => void saveIdeas(), 350);
+    }));
+    $("[data-add-idea-card]", container)?.addEventListener("click", async () => {
+      await flushPendingSave();
+      const index = ideas.cards.length;
+      ideas.cards.push({ id: crypto.randomUUID(), title: "", body: "", x: 4 + index % 3 * 31, y: 18 + Math.floor(index / 3) * 210 });
+      await saveIdeas();
+      renderIdeationModule(container);
+      $("[data-card-title]", container)?.focus();
+    });
+    $$("[data-card-title],[data-card-body]", container).forEach(input => input.addEventListener("input", () => {
+      const card = ideas.cards.find(item => item.id === (input.dataset.cardTitle || input.dataset.cardBody));
+      if (!card) return;
+      if (input.dataset.cardTitle) card.title = input.value;
+      else card.body = input.value;
+      clearTimeout(timer);
+      timer = setTimeout(() => void saveIdeas(), 350);
+    }));
+    $$("[data-delete-idea]", container).forEach(button => button.addEventListener("click", async () => {
+      await flushPendingSave();
+      ideas.cards = ideas.cards.filter(card => card.id !== button.dataset.deleteIdea);
+      await saveIdeas();
+      renderIdeationModule(container);
+    }));
+    $$("[data-card-grip]", container).forEach(grip => grip.addEventListener("pointerdown", event => {
+      if (event.target.closest("button")) return;
+      const card = ideas.cards.find(item => item.id === grip.dataset.cardGrip);
+      const board = $(".idea-canvas", container);
+      if (!card || !board) return;
+      event.preventDefault();
+      grip.setPointerCapture(event.pointerId);
+      const rect = board.getBoundingClientRect();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const originX = Number(card.x) || 0;
+      const originY = Number(card.y) || 0;
+      const move = pointerEvent => {
+        card.x = Math.max(0, Math.min(82, originX + (pointerEvent.clientX - startX) / rect.width * 100));
+        card.y = Math.max(0, Math.min(rect.height - 185, originY + pointerEvent.clientY - startY));
+        const note = $(`[data-idea-card="${CSS.escape(card.id)}"]`, container);
+        if (note) { note.style.left = `${card.x}%`; note.style.top = `${card.y}px`; }
+      };
+      const finish = async () => {
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", finish);
+        grip.removeEventListener("pointercancel", finish);
+        await saveIdeas();
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", finish, { once: true });
+      grip.addEventListener("pointercancel", finish, { once: true });
+    }));
+    $("[data-add-mood-url]", container)?.addEventListener("click", async () => {
+      const src = await promptDialog("Add an image reference", "Paste an image URL");
+      if (!src) return;
+      if (!/^https?:\/\//i.test(src.trim())) { notify("Enter an image URL beginning with http:// or https://."); return; }
+      await flushPendingSave();
+      ideas.moodboard.push({ id: crypto.randomUUID(), src: src.trim(), caption: "" });
+      await saveIdeas();
+      renderIdeationModule(container);
+    });
+    $("[data-add-mood-file]", container)?.addEventListener("click", () => {
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.accept = "image/*";
+      picker.addEventListener("change", async () => {
+        const file = picker.files?.[0];
+        if (!file) return;
+        try {
+          const src = await compressMoodboardImage(file);
+          await flushPendingSave();
+          ideas.moodboard.push({ id: crypto.randomUUID(), src, caption: file.name.replace(/\.[^.]+$/, "") });
+          await saveIdeas();
+          renderIdeationModule(container);
+        } catch (error) {
+          console.error("Could not add moodboard image.", error);
+          notify(`Could not add image: ${error.message}`);
+        }
+      });
+      picker.click();
+    });
+    $$("[data-mood-caption]", container).forEach(input => input.addEventListener("input", () => {
+      const image = ideas.moodboard.find(item => item.id === input.dataset.moodCaption);
+      if (!image) return;
+      image.caption = input.value;
+      clearTimeout(timer);
+      timer = setTimeout(() => void saveIdeas(), 350);
+    }));
+    $$("[data-delete-mood]", container).forEach(button => button.addEventListener("click", async () => {
+      ideas.moodboard = ideas.moodboard.filter(image => image.id !== button.dataset.deleteMood);
+      await saveIdeas();
+      renderIdeationModule(container);
     }));
   }
 
   function renderEditingModule(container) {
     const data = readJsonFile("Editing/revisions.json", { snapshots: [], checklist: [] });
     const checklist = data.checklist || [];
-    container.innerHTML = `${modulePage("editing", "Revision desk", "Track manuscript checkpoints and keep editorial passes visible.", '<button class="button-primary" data-save-revision>Save version snapshot</button>')}<div class="module-grid"><section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">REVISION HISTORY</span><h2>Snapshots</h2></div><span class="stat-pill">${data.snapshots.length} saved</span></div><div class="revision-list">${data.snapshots.length ? data.snapshots.map(item => `<article class="revision-item"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.date)} · ${item.words} words · ${escapeHtml(item.chapter || "No active chapter")}</small><p>${escapeHtml(item.note || "")}</p></article>`).join("") : '<div class="empty-hint">Save a snapshot before or after a revision pass.</div>'}</div></section><section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">EDITORIAL PASSES</span><h2>Revision checklist</h2></div><button class="icon-button small" data-add-checklist title="Add checklist item">＋</button></div><div class="revision-checklist">${checklist.map((item, index) => `<label><input type="checkbox" data-check-index="${index}" ${item.done ? "checked" : ""}><span>${escapeHtml(item.text)}</span><button type="button" data-remove-check="${index}" aria-label="Remove item">×</button></label>`).join("") || '<div class="empty-hint">Add focused passes such as character arcs or continuity.</div>'}</div></section></div></div>`;
+    const chapters = [...state.files.keys()].filter(path => /^Manuscript\/.+\.md$/i.test(path)).sort((a, b) => a.localeCompare(b));
+    const selectedPath = chapters.includes(state.proofreadPath) ? state.proofreadPath : chapters.includes(state.activePath) ? state.activePath : chapters[0] || "";
+    state.proofreadPath = selectedPath;
+    const chapterOptions = chapters.map(path => `<option value="${escapeHtml(path)}" ${path === selectedPath ? "selected" : ""}>${escapeHtml(basename(path))}</option>`).join("");
+    container.innerHTML = `${modulePage("editing", "Revision desk", "Track manuscript checkpoints, run a proofreading pass, and keep editorial focus visible.", '<button class="button-primary" data-save-revision>Save version snapshot</button>')}<section class="module-card proofreading-card"><div class="module-card-heading"><div><span class="eyebrow">PROOFREADING · RULE-BASED</span><h2>Proofreading pass</h2><p class="proofreading-intro">Catch common typos, repeated words, and punctuation slips. No AI or text is sent anywhere; review each suggestion before applying it.</p></div><button class="button-secondary" type="button" data-run-proofread ${chapters.length ? "" : "disabled"}>Check chapter</button></div><div class="proofreading-controls"><label for="proofread-chapter">CHAPTER</label><select id="proofread-chapter" ${chapters.length ? "" : "disabled"}>${chapterOptions || '<option value="">No manuscript chapters found</option>'}</select><span data-proofread-status>${chapters.length ? "Ready when you are" : "Add a Markdown chapter in Manuscript to get started."}</span></div><div class="proofreading-results" data-proofread-results><div class="empty-hint">Choose a chapter and run a check to see suggested corrections.</div></div></section><div class="module-grid"><section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">REVISION HISTORY</span><h2>Snapshots</h2></div><span class="stat-pill">${data.snapshots.length} saved</span></div><div class="revision-list">${data.snapshots.length ? data.snapshots.map(item => `<article class="revision-item"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.date)} · ${item.words} words · ${escapeHtml(item.chapter || "No active chapter")}</small><p>${escapeHtml(item.note || "")}</p></article>`).join("") : '<div class="empty-hint">Save a snapshot before or after a revision pass.</div>'}</div></section><section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">EDITORIAL PASSES</span><h2>Revision checklist</h2></div><button class="icon-button small" data-add-checklist title="Add checklist item">＋</button></div><div class="revision-checklist">${checklist.map((item, index) => `<label><input type="checkbox" data-check-index="${index}" ${item.done ? "checked" : ""}><span>${escapeHtml(item.text)}</span><button type="button" data-remove-check="${index}" aria-label="Remove item">×</button></label>`).join("") || '<div class="empty-hint">Add focused passes such as character arcs or continuity.</div>'}</div></section></div></div>`;
+    $("#proofread-chapter", container)?.addEventListener("change", event => { state.proofreadPath = event.target.value; });
+    $("[data-run-proofread]", container)?.addEventListener("click", async () => {
+      if (state.dirty) await saveActiveFile();
+      const path = $("#proofread-chapter", container).value;
+      if (!path || !state.files.has(path)) { notify("Choose an available manuscript chapter first."); return; }
+      state.proofreadPath = path;
+      const results = proofreadText(state.files.get(path));
+      const status = $("[data-proofread-status]", container);
+      status.textContent = results.length ? `${results.length} suggestion${results.length === 1 ? "" : "s"} · nothing changed yet` : "No common issues found · your text was not changed";
+      renderProofreadResults(container, results);
+    });
+    $("[data-proofread-results]", container).addEventListener("click", async event => {
+      const button = event.target.closest("[data-proofread-apply]");
+      if (!button) return;
+      const path = state.proofreadPath;
+      const content = state.files.get(path);
+      const index = Number(button.dataset.proofreadApply);
+      const result = proofreadText(content)[index];
+      if (!result || content.slice(result.start, result.end) !== result.match) {
+        notify("This suggestion is out of date. Run the check again before applying it.");
+        return;
+      }
+      state.files.set(path, `${content.slice(0, result.start)}${result.replacement}${content.slice(result.end)}`);
+      if (path === state.activePath) {
+        $("#document-content").value = state.files.get(path);
+        renderMarkdownEditor(state.files.get(path));
+        state.lastWordCount = words(editorBodyText());
+        updateStats();
+      }
+      await saveJsonFile(path, state.files.get(path));
+      const updated = proofreadText(state.files.get(path));
+      $("[data-proofread-status]", container).textContent = updated.length ? `${updated.length} suggestion${updated.length === 1 ? "" : "s"} remaining · one correction applied` : "Correction applied · no common issues remain";
+      renderProofreadResults(container, updated);
+      notify("Proofreading correction applied");
+    });
     $("[data-save-revision]", container).addEventListener("click", () => void saveRevisionSnapshot(data, container));
     $("[data-add-checklist]", container).addEventListener("click", async () => {
       const text = await promptDialog("Add revision pass", "e.g. Check character motivations");
