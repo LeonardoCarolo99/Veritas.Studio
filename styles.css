@@ -654,8 +654,27 @@ body[data-theme="light"] .context-menu kbd { color: #77766f; }
 .proofread-suggestion code { padding: 2px 5px; border-radius: 3px; background: var(--panel); color: var(--text); font: 10px var(--mono); }
 .proofread-suggestion mark { border-radius: 2px; background: color-mix(in srgb,var(--accent) 40%,transparent); color: var(--text); }
 .proofread-reason { color: var(--accent-bright); font: 9px var(--mono); letter-spacing: .4px; text-transform: uppercase; }
+.proofread-review-label { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font: 9px var(--mono); text-transform: uppercase; }
 .proofread-clear { display: flex; gap: 10px; align-items: center; padding: 14px 0; color: var(--green); }
 .proofread-clear span { color: var(--soft); font-size: 11px; }
+.prose-metrics-card { display: grid; gap: 19px; margin-bottom: 18px; }
+.prose-metric-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.prose-metric-heading h2 { margin: 6px 0; }
+.prose-metric-heading p { max-width: 700px; margin: 0; color: var(--muted); font: 11px/1.6 var(--sans); }
+.prose-stat-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.prose-stat { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+.prose-stat>span { display: block; color: var(--muted); font: 9px var(--mono); letter-spacing: .6px; }
+.prose-stat strong { display: block; margin: 8px 0 5px; color: var(--text); font: 500 24px var(--serif); overflow-wrap: anywhere; }
+.prose-stat strong small { color: var(--soft); font: 11px var(--sans); }
+.prose-stat>small { display: block; color: var(--muted); font: 10px/1.5 var(--sans); }
+.prose-rhythm { padding-top: 15px; border-top: 1px solid var(--line); }
+.prose-rhythm-label { display: flex; justify-content: space-between; margin-bottom: 10px; color: var(--soft); font-size: 11px; }
+.prose-rhythm-label span:last-child { color: var(--muted); font: 9px var(--mono); }
+.prose-rhythm-row { display: grid; grid-template-columns: 140px minmax(40px,1fr) 28px; align-items: center; gap: 11px; margin: 8px 0; color: var(--muted); font: 10px var(--sans); }
+.prose-rhythm-row strong { color: var(--soft); font: 10px var(--mono); text-align: right; }
+.prose-rhythm-track { height: 6px; overflow: hidden; border-radius: 5px; background: var(--panel); }
+.prose-rhythm-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.prose-rhythm>p { margin: 13px 0 0; color: var(--muted); font: 10px/1.6 var(--sans); }
 .publishing-plan { min-height: 270px; margin: 22px 0 12px; }
 .publishing-tabs { display: flex; gap: 6px; width: 100%; margin: 0 0 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .publishing-tabs button { flex: 0 0 auto; padding: 8px 13px; border: 1px solid transparent; border-radius: 5px; color: var(--soft); background: transparent; font: 11px var(--sans); }
@@ -808,6 +827,7 @@ body[data-theme="light"] .publishing-form-grid select,body[data-theme="light"] .
   .module-grid,.project-manager-list,.publishing-finance-forms,.publishing-marketing-grid { grid-template-columns: 1fr; }
   .dictionary-layout { grid-template-columns: 1fr; }
   .publishing-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .prose-stat-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .todo-list { grid-template-columns: 1fr; }
   .lifecycle-header { flex-direction: column; }
   .lifecycle-actions { justify-content: flex-start; }
@@ -830,6 +850,8 @@ body[data-theme="light"] .publishing-form-grid select,body[data-theme="light"] .
 }
 @media (max-width: 600px) {
   .editor-surface { padding-left: 14px; padding-right: 14px; }
+  .prose-rhythm-row { grid-template-columns: 112px minmax(30px,1fr) 22px; gap: 7px; font-size: 9px; }
+  .prose-metric-heading { flex-direction: column; }
   .format-toolbar { gap: 1px; overflow-x: auto; }
   .format-toolbar select { min-width: 103px; }
   .format-toolbar .toolbar-divider { margin: 0 2px; }

@@ -686,11 +686,139 @@
           replacement: rule.replace(match[0]),
           contextBefore: text.slice(Math.max(0, match.index - 35), match.index),
           contextAfter: text.slice(match.index + match[0].length, match.index + match[0].length + 35),
-          reason: rule.reason
+          hasMoreAfter: match.index + match[0].length + 35 < text.length,
+          reason: rule.reason,
+          guidance: "",
+          automatic: true
         });
       }
     });
+    const addFinding = (start, match, reason, guidance) => suggestions.push({
+      start,
+      end: start + match.length,
+      match,
+      replacement: null,
+      contextBefore: text.slice(Math.max(0, start - 35), start),
+      contextAfter: text.slice(start + match.length, start + match.length + 35),
+      hasMoreAfter: start + match.length + 35 < text.length,
+      reason,
+      guidance,
+      automatic: false
+    });
+    const findPattern = (pattern, reason, guidance) => {
+      for (const match of text.matchAll(pattern)) addFinding(match.index, match[0], reason, guidance);
+    };
+    findPattern(/\b(?:am|is|are|was|were|be|been|being)\s+(?:[\p{L}]+(?:ed|en)|built|made|known|seen|given|taken|written|found|left|lost|sent|told|held|kept|brought|caught|set|put|shut|won|done)\b/giu,
+      "Possible passive voice", "Consider naming the actor if the action should feel direct; passive voice may be intentional.");
+    findPattern(/\b(?:some|many|most|often|usually|arguably|perhaps|probably|possibly|seemingly|reportedly|generally|various|numerous|several)\b/giu,
+      "Possible weasel word", "This wording may blur certainty or quantity. Can you be more specific?");
+    findPattern(/\b(?:could\s+(?:see|hear|feel)|saw|heard|felt|noticed|realized|realised|wondered|thought|watched|looked|seemed|appeared|decided|knew)\b/giu,
+      "Possible filter word", "This may place distance between the reader and the experience. Consider whether the perception can be shown directly.");
+
+    const prose = proseTextForAnalysis(text);
+    const diagnosticProse = text
+      .replace(/```[\s\S]*?```/g, block => block.replace(/[^\n]/g, " "))
+      .replace(/^#{1,6}\s+/gm, heading => " ".repeat(heading.length))
+      .replace(/[`*_~]/g, " ");
+    const proseWords = [...prose.matchAll(/\b[\p{L}]+\b/gu)];
+    const adverbs = [...diagnosticProse.matchAll(/\b[\p{L}]+ly\b/giu)];
+    if (adverbs.length >= Math.max(4, Math.ceil(proseWords.length * 0.03)) && adverbs.length) {
+      addFinding(adverbs[0].index, adverbs[0][0], "Potential adverb overuse",
+        `${adverbs.length} possible -ly adverbs (${Math.round(adverbs.length / Math.max(1, proseWords.length) * 100)}% of words). Review whether the verbs or surrounding details can carry the meaning.`);
+    }
+
+    const ignoredRepetition = new Set("about after again against among around because before being between could every first from have into just more most never other over said same should since some than that their them then there these they thing this through under until very what when where which while with would your".split(" "));
+    const repeatedWords = new Map();
+    for (const match of diagnosticProse.matchAll(/\b[\p{L}]{4,}\b/gu)) {
+      if (match[0][0] !== match[0][0].toLowerCase()) continue;
+      const word = match[0].toLowerCase();
+      if (ignoredRepetition.has(word)) continue;
+      const entry = repeatedWords.get(word) || { count: 0, start: match.index };
+      entry.count += 1;
+      repeatedWords.set(word, entry);
+    }
+    [...repeatedWords.entries()].filter(([, entry]) => entry.count >= 4)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 8)
+      .forEach(([word, entry]) => addFinding(entry.start, word, "Repeated word pattern",
+        `"${word}" appears ${entry.count} times. Check nearby passages for deliberate emphasis versus unintentional repetition.`));
     return suggestions.sort((a, b) => a.start - b.start || a.end - b.end);
+  }
+
+  function proseTextForAnalysis(text) {
+    return text
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "")
+      .replace(/^\s*>+\s?/gm, "")
+      .replace(/[`*_~]/g, " ");
+  }
+
+  function analyzeProse(text) {
+    const prose = proseTextForAnalysis(text);
+    const tokens = [...prose.matchAll(/\b[\p{L}\p{N}]+(?:['’'-][\p{L}\p{N}]+)*\b/gu)];
+    const sentences = (prose.match(/[^.!?]+(?:[.!?]+["'”’)\]]*|$)/g) || [])
+      .map(sentence => [...sentence.matchAll(/\b[\p{L}\p{N}]+(?:['’'-][\p{L}\p{N}]+)*\b/gu)].length)
+      .filter(length => length > 0);
+    const sentenceCount = sentences.length;
+    const wordCount = tokens.length;
+    const averageSentence = sentenceCount ? wordCount / sentenceCount : 0;
+    const variance = sentenceCount ? sentences.reduce((total, length) => total + (length - averageSentence) ** 2, 0) / sentenceCount : 0;
+    const syllableCount = tokens.reduce((total, token) => total + estimateSyllables(token[0]), 0);
+    const grade = wordCount && sentenceCount
+      ? 0.39 * (wordCount / sentenceCount) + 11.8 * (syllableCount / wordCount) - 15.59
+      : null;
+    let dialogueWords = 0;
+    for (const match of prose.matchAll(/"([^"]+)"|“([^”]+)”|«([^»]+)»/g)) {
+      dialogueWords += words(match[1] || match[2] || match[3] || "");
+    }
+    const lengths = { short: 0, medium: 0, long: 0 };
+    sentences.forEach(length => {
+      if (length <= 8) lengths.short += 1;
+      else if (length <= 20) lengths.medium += 1;
+      else lengths.long += 1;
+    });
+    const paragraphs = prose.split(/\n\s*\n/).map(paragraph => words(paragraph)).filter(count => count > 0);
+    const adverbCount = [...prose.matchAll(/\b[\p{L}]+ly\b/giu)].length;
+    return {
+      wordCount,
+      sentenceCount,
+      averageSentence,
+      sentenceDeviation: Math.sqrt(variance),
+      lengths,
+      grade,
+      dialogueWords,
+      dialogueRatio: wordCount ? dialogueWords / wordCount * 100 : 0,
+      paragraphCount: paragraphs.length,
+      averageParagraph: paragraphs.length ? wordCount / paragraphs.length : 0,
+      adverbCount,
+      adverbRate: wordCount ? adverbCount / wordCount * 100 : 0
+    };
+  }
+
+  function estimateSyllables(word) {
+    const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+    if (!normalized) return 1;
+    const commonExceptions = { people: 2, business: 2, every: 2, different: 3, interesting: 3, hour: 1, quiet: 2 };
+    if (commonExceptions[normalized]) return commonExceptions[normalized];
+    if (normalized.length <= 3) return 1;
+    const groups = normalized.match(/[aeiouy]+/g) || [];
+    let count = groups.length;
+    if (normalized.endsWith("e") && !/[^aeiou]le$/.test(normalized) && count > 1) count -= 1;
+    return Math.max(1, count);
+  }
+
+  function renderProseMetrics(container, text, chapterName) {
+    const metrics = analyzeProse(text);
+    const results = $("[data-prose-metrics]", container);
+    if (!results) return;
+    const grade = metrics.grade === null ? "—" : metrics.grade.toFixed(1);
+    const rhythm = metrics.sentenceCount
+      ? `${metrics.lengths.short} short · ${metrics.lengths.medium} medium · ${metrics.lengths.long} long`
+      : "No complete sentences detected";
+    results.innerHTML = `<div class="prose-metric-heading"><div><span class="eyebrow">PROSE METRICS · APPROXIMATIONS</span><h2>Rhythm & readability</h2><p>Statistics for ${escapeHtml(chapterName)}. Flesch–Kincaid and syllable counts are estimates; use them as signals, not targets.</p></div><span class="stat-pill">${metrics.paragraphCount} ${metrics.paragraphCount === 1 ? "paragraph" : "paragraphs"}</span></div><div class="prose-stat-grid"><article class="prose-stat"><span>WORDS</span><strong>${metrics.wordCount.toLocaleString()}</strong><small>${metrics.sentenceCount} sentences</small></article><article class="prose-stat"><span>AVG. SENTENCE</span><strong>${metrics.averageSentence.toFixed(1)} <small>words</small></strong><small>σ ${metrics.sentenceDeviation.toFixed(1)} · ${rhythm}</small></article><article class="prose-stat"><span>FLESCH–KINCAID</span><strong>${grade} <small>${metrics.grade === null ? "" : "grade"}</small></strong><small>U.S. school-grade estimate</small></article><article class="prose-stat"><span>DIALOGUE</span><strong>${metrics.dialogueRatio.toFixed(1)}<small>%</small></strong><small>${metrics.dialogueWords} dialogue · ${Math.max(0, metrics.wordCount - metrics.dialogueWords)} narrative words</small></article></div><div class="prose-rhythm"><div class="prose-rhythm-label"><span>Sentence-length mix</span><span>${metrics.sentenceCount} total</span></div>${[["Short · 1–8 words", metrics.lengths.short], ["Medium · 9–20 words", metrics.lengths.medium], ["Long · 21+ words", metrics.lengths.long]].map(([label, count]) => `<div class="prose-rhythm-row"><span>${label}</span><div class="prose-rhythm-track"><i style="width:${metrics.sentenceCount ? count / metrics.sentenceCount * 100 : 0}%"></i></div><strong>${count}</strong></div>`).join("")}<p>Sentence-length variety: standard deviation ${metrics.sentenceDeviation.toFixed(1)} words · average paragraph ${metrics.averageParagraph.toFixed(1)} words · ${metrics.adverbCount} possible -ly adverbs (${metrics.adverbRate.toFixed(1)}%).</p></div>`;
   }
 
   function renderProofreadResults(container, suggestions) {
@@ -700,7 +828,11 @@
       return;
     }
     results.innerHTML = suggestions.map((item, index) => {
-      return `<article class="proofread-suggestion"><div><span class="proofread-reason">${escapeHtml(item.reason)}</span><p>Replace <code>${escapeHtml(item.match)}</code> with <code>${escapeHtml(item.replacement)}</code></p><small>…${item.start > item.contextBefore.length ? "…" : ""}${escapeHtml(item.contextBefore)}<mark>${escapeHtml(item.match)}</mark>${escapeHtml(item.contextAfter)}…</small></div><button class="button-secondary" type="button" data-proofread-apply="${index}">Apply</button></article>`;
+      const action = item.automatic
+        ? `<p>Replace <code>${escapeHtml(item.match)}</code> with <code>${escapeHtml(item.replacement)}</code></p>`
+        : `<p>${escapeHtml(item.guidance)}</p>`;
+      const context = `${escapeHtml(item.contextBefore)}<mark>${escapeHtml(item.match)}</mark>${escapeHtml(item.contextAfter)}`;
+      return `<article class="proofread-suggestion"><div><span class="proofread-reason">${escapeHtml(item.reason)}</span>${action}<small>${item.start > item.contextBefore.length ? "…" : ""}${context}${item.hasMoreAfter ? "…" : ""}</small></div>${item.automatic ? `<button class="button-secondary" type="button" data-proofread-apply="${index}">Apply</button>` : '<span class="proofread-review-label">Review</span>'}</article>`;
     }).join("");
   }
 
@@ -965,17 +1097,36 @@
     const selectedPath = chapters.includes(state.proofreadPath) ? state.proofreadPath : chapters.includes(state.activePath) ? state.activePath : chapters[0] || "";
     state.proofreadPath = selectedPath;
     const chapterOptions = chapters.map(path => `<option value="${escapeHtml(path)}" ${path === selectedPath ? "selected" : ""}>${escapeHtml(basename(path))}</option>`).join("");
-    container.innerHTML = `${modulePage("editing", "Revision desk", "Track manuscript checkpoints, run a proofreading pass, and keep editorial focus visible.", '<button class="button-primary" data-save-revision>Save version snapshot</button>')}<section class="module-card proofreading-card"><div class="module-card-heading"><div><span class="eyebrow">PROOFREADING · RULE-BASED</span><h2>Proofreading pass</h2><p class="proofreading-intro">Catch common typos, repeated words, and punctuation slips. No AI or text is sent anywhere; review each suggestion before applying it.</p></div><button class="button-secondary" type="button" data-run-proofread ${chapters.length ? "" : "disabled"}>Check chapter</button></div><div class="proofreading-controls"><label for="proofread-chapter">CHAPTER</label><select id="proofread-chapter" ${chapters.length ? "" : "disabled"}>${chapterOptions || '<option value="">No manuscript chapters found</option>'}</select><span data-proofread-status>${chapters.length ? "Ready when you are" : "Add a Markdown chapter in Manuscript to get started."}</span></div><div class="proofreading-results" data-proofread-results><div class="empty-hint">Choose a chapter and run a check to see suggested corrections.</div></div></section><div class="module-grid"><section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">REVISION HISTORY</span><h2>Snapshots</h2></div><span class="stat-pill">${data.snapshots.length} saved</span></div><div class="revision-list">${data.snapshots.length ? data.snapshots.map(item => `<article class="revision-item"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.date)} · ${item.words} words · ${escapeHtml(item.chapter || "No active chapter")}</small><p>${escapeHtml(item.note || "")}</p></article>`).join("") : '<div class="empty-hint">Save a snapshot before or after a revision pass.</div>'}</div></section><section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">EDITORIAL PASSES</span><h2>Revision checklist</h2></div><button class="icon-button small" data-add-checklist title="Add checklist item">＋</button></div><div class="revision-checklist">${checklist.map((item, index) => `<label><input type="checkbox" data-check-index="${index}" ${item.done ? "checked" : ""}><span>${escapeHtml(item.text)}</span><button type="button" data-remove-check="${index}" aria-label="Remove item">×</button></label>`).join("") || '<div class="empty-hint">Add focused passes such as character arcs or continuity.</div>'}</div></section></div></div>`;
-    $("#proofread-chapter", container)?.addEventListener("change", event => { state.proofreadPath = event.target.value; });
+    container.innerHTML = `${modulePage("editing", "Revision desk", "Track manuscript checkpoints, run a proofreading pass, and keep editorial focus visible.", '<button class="button-primary" data-save-revision>Save version snapshot</button>')}
+      <section class="module-card proofreading-card">
+        <div class="module-card-heading"><div><span class="eyebrow">PROOFREADING · RULE-BASED</span><h2>Prose diagnostics</h2><p class="proofreading-intro">Catch common typos and review possible passive voice, weasel words, filter words, adverb overuse, and repeated words. Style checks are heuristic prompts, not corrections. No AI or text is sent anywhere.</p></div><button class="button-secondary" type="button" data-run-proofread ${chapters.length ? "" : "disabled"}>Analyze chapter</button></div>
+        <div class="proofreading-controls"><label for="proofread-chapter">CHAPTER</label><select id="proofread-chapter" ${chapters.length ? "" : "disabled"}>${chapterOptions || '<option value="">No manuscript chapters found</option>'}</select><span data-proofread-status>${chapters.length ? "Ready when you are" : "Add a Markdown chapter in Manuscript to get started."}</span></div>
+        <div class="proofreading-results" data-proofread-results><div class="empty-hint">Analyze the selected chapter to review proofreading and style suggestions.</div></div>
+      </section>
+      <section class="module-card prose-metrics-card" data-prose-metrics><div class="empty-hint">Prose statistics for the selected chapter will appear here.</div></section>
+      <div class="module-grid">
+        <section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">REVISION HISTORY</span><h2>Snapshots</h2></div><span class="stat-pill">${data.snapshots.length} saved</span></div><div class="revision-list">${data.snapshots.length ? data.snapshots.map(item => `<article class="revision-item"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.date)} · ${item.words} words · ${escapeHtml(item.chapter || "No active chapter")}</small><p>${escapeHtml(item.note || "")}</p></article>`).join("") : '<div class="empty-hint">Save a snapshot before or after a revision pass.</div>'}</div></section>
+        <section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">EDITORIAL PASSES</span><h2>Revision checklist</h2></div><button class="icon-button small" data-add-checklist title="Add checklist item">＋</button></div><div class="revision-checklist">${checklist.map((item, index) => `<label><input type="checkbox" data-check-index="${index}" ${item.done ? "checked" : ""}><span>${escapeHtml(item.text)}</span><button type="button" data-remove-check="${index}" aria-label="Remove item">×</button></label>`).join("") || '<div class="empty-hint">Add focused passes such as character arcs or continuity.</div>'}</div></section>
+      </div></div>`;
+    if (selectedPath) renderProseMetrics(container, state.files.get(selectedPath) || "", basename(selectedPath));
+    $("#proofread-chapter", container)?.addEventListener("change", event => {
+      const path = event.target.value;
+      state.proofreadPath = path;
+      if (path && state.files.has(path)) renderProseMetrics(container, state.files.get(path), basename(path));
+      $("[data-proofread-status]", container).textContent = path ? "Ready when you are" : "Choose a manuscript chapter.";
+      $("[data-proofread-results]", container).innerHTML = '<div class="empty-hint">Analyze the selected chapter to review proofreading and style suggestions.</div>';
+    });
     $("[data-run-proofread]", container)?.addEventListener("click", async () => {
       if (state.dirty) await saveActiveFile();
       const path = $("#proofread-chapter", container).value;
       if (!path || !state.files.has(path)) { notify("Choose an available manuscript chapter first."); return; }
       state.proofreadPath = path;
-      const results = proofreadText(state.files.get(path));
+      const content = state.files.get(path);
+      const results = proofreadText(content);
       const status = $("[data-proofread-status]", container);
-      status.textContent = results.length ? `${results.length} suggestion${results.length === 1 ? "" : "s"} · nothing changed yet` : "No common issues found · your text was not changed";
+      status.textContent = results.length ? `${results.length} finding${results.length === 1 ? "" : "s"} · nothing changed yet` : "No common issues found · your text was not changed";
       renderProofreadResults(container, results);
+      renderProseMetrics(container, content, basename(path));
     });
     $("[data-proofread-results]", container).addEventListener("click", async event => {
       const button = event.target.closest("[data-proofread-apply]");
@@ -984,7 +1135,7 @@
       const content = state.files.get(path);
       const index = Number(button.dataset.proofreadApply);
       const result = proofreadText(content)[index];
-      if (!result || content.slice(result.start, result.end) !== result.match) {
+      if (!result?.automatic || content.slice(result.start, result.end) !== result.match) {
         notify("This suggestion is out of date. Run the check again before applying it.");
         return;
       }
@@ -997,8 +1148,9 @@
       }
       await saveJsonFile(path, state.files.get(path));
       const updated = proofreadText(state.files.get(path));
-      $("[data-proofread-status]", container).textContent = updated.length ? `${updated.length} suggestion${updated.length === 1 ? "" : "s"} remaining · one correction applied` : "Correction applied · no common issues remain";
+      $("[data-proofread-status]", container).textContent = updated.length ? `${updated.length} finding${updated.length === 1 ? "" : "s"} remaining · one correction applied` : "Correction applied · no common issues remain";
       renderProofreadResults(container, updated);
+      renderProseMetrics(container, state.files.get(path), basename(path));
       notify("Proofreading correction applied");
     });
     $("[data-save-revision]", container).addEventListener("click", () => void saveRevisionSnapshot(data, container));
@@ -3034,6 +3186,7 @@
     menu.style.top = `${rect.bottom + 4}px`;
     menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 225))}px`;
     menu.style.right = "auto";
+    document.body.append(menu);
     menu.addEventListener("click", event => {
       const action = event.target.closest("[data-app-action]")?.dataset.appAction;
       menu.remove();
