@@ -611,7 +611,9 @@
       logline: String(source.logline || ""),
       premise: String(source.premise || ""),
       notes: String(source.notes || ""),
-      cards: Array.isArray(source.cards) ? source.cards.filter(item => item && typeof item.id === "string") : [],
+      cards: Array.isArray(source.cards) ? source.cards.filter(item => item && typeof item.id === "string").map(item => ({ ...item })) : [],
+      canvas: source.canvas && typeof source.canvas === "object" ? { ...source.canvas } : {},
+      canvasVersion: Number(source.canvasVersion) || 0,
       moodboard: Array.isArray(source.moodboard) ? source.moodboard.filter(item => item && typeof item.id === "string" && typeof item.src === "string") : []
     };
     const tab = state.ideationTab;
@@ -623,7 +625,7 @@
     const body = tab === "seed"
       ? `<div class="module-card idea-card"><label>LOGLINE<textarea data-idea-field="logline" placeholder="A protagonist, an impossible goal, and what stands in the way…">${escapeHtml(ideas.logline)}</textarea></label><label>PREMISE & CENTRAL QUESTION<textarea data-idea-field="premise" placeholder="What is this story really about?">${escapeHtml(ideas.premise)}</textarea></label><label>CONCEPTUAL NOTES<textarea data-idea-field="notes" class="large-notes" placeholder="Capture questions, images, fragments, and possibilities…">${escapeHtml(ideas.notes)}</textarea></label><div class="module-save-state" data-idea-save-state>Saved locally</div></div>`
       : tab === "brainstorm"
-        ? `<section class="idea-canvas" aria-label="Brainstorm board" style="--idea-rows:${Math.max(3, Math.ceil(ideas.cards.length / 3))}">${ideas.cards.length ? ideas.cards.map((card, index) => `<article class="idea-note" data-idea-card="${escapeHtml(card.id)}" style="left:${Math.max(0, Math.min(73, Number.isFinite(Number(card.x)) ? Number(card.x) : (4 + index % 3 * 31)))}%;top:${Math.max(0, Number.isFinite(Number(card.y)) ? Number(card.y) : (18 + Math.floor(index / 3) * 210))}px"><div class="idea-note-grip" data-card-grip="${escapeHtml(card.id)}" title="Drag card">⠿ <span>DRAG TO ARRANGE</span><button type="button" data-delete-idea="${escapeHtml(card.id)}" aria-label="Delete idea card">×</button></div><input data-card-title="${escapeHtml(card.id)}" aria-label="Idea title" maxlength="100" placeholder="A spark of an idea…" value="${escapeHtml(String(card.title || ""))}"><textarea data-card-body="${escapeHtml(card.id)}" aria-label="Idea details" placeholder="Explore a scenario, question, image, or possibility…">${escapeHtml(String(card.body || ""))}</textarea></article>`).join("") : '<div class="idea-canvas-empty">Start anywhere. Add a card for a possibility, a scene, a question, or a “what if?”</div>'}</section><div class="module-save-state" data-idea-save-state>Cards save as you work · drag by the handle to rearrange</div>`
+        ? `<section class="idea-canvas" aria-label="Brainstorm board" tabindex="0"><div class="idea-canvas-tools" role="toolbar" aria-label="Canvas controls"><button type="button" data-canvas-zoom-out aria-label="Zoom out" title="Zoom out">−</button><span data-canvas-zoom-level aria-live="polite">100%</span><button type="button" data-canvas-zoom-in aria-label="Zoom in" title="Zoom in">＋</button><button type="button" data-canvas-zoom-reset title="Reset zoom to 100%">100%</button><button type="button" data-canvas-fit title="Fit all idea cards in view">Fit</button></div><div class="idea-canvas-world">${ideas.cards.length ? ideas.cards.map(card => `<article class="idea-note" data-idea-card="${escapeHtml(card.id)}"><div class="idea-note-grip" data-card-grip="${escapeHtml(card.id)}" title="Drag card">⠿ <span>DRAG TO ARRANGE</span><button type="button" data-delete-idea="${escapeHtml(card.id)}" aria-label="Delete idea card">×</button></div><input data-card-title="${escapeHtml(card.id)}" aria-label="Idea title" maxlength="100" placeholder="A spark of an idea…" value="${escapeHtml(String(card.title || ""))}"><textarea data-card-body="${escapeHtml(card.id)}" aria-label="Idea details" placeholder="Explore a scenario, question, image, or possibility…">${escapeHtml(String(card.body || ""))}</textarea></article>`).join("") : '<div class="idea-canvas-empty">Start anywhere. Add a card for a possibility, a scene, a question, or a “what if?”</div>'}</div></section><div class="module-save-state" data-idea-save-state>Drag the empty canvas to move around · scroll to zoom · drag a note handle to arrange</div>`
         : `<section class="moodboard-grid">${ideas.moodboard.length ? ideas.moodboard.map(image => `<article class="moodboard-item"><img src="${escapeHtml(image.src)}" alt="${escapeHtml(String(image.caption || "Inspiration reference"))}"><input data-mood-caption="${escapeHtml(image.id)}" aria-label="Image caption" maxlength="180" placeholder="Add a note about this reference…" value="${escapeHtml(String(image.caption || ""))}"><button type="button" data-delete-mood="${escapeHtml(image.id)}" aria-label="Remove inspiration image">Remove</button></article>`).join("") : '<div class="moodboard-empty">Collect colors, imagery, places, textures, and visual references that capture the feeling of your story.</div>'}</section><p class="moodboard-note">Images are kept in this project. Add references you have permission to use.</p><div class="module-save-state" data-idea-save-state>Saved locally</div>`;
     container.innerHTML = `${modulePage("ideation", "The idea room", "Explore possibilities, collect visual references, and shape the seed of your story.", controls)}<nav class="ideation-tabs" aria-label="Ideation sections">${[["seed", "Story seed"], ["brainstorm", "Brainstorm"], ["moodboard", "Moodboard"]].map(([id, label]) => `<button type="button" data-idea-tab="${id}" class="${tab === id ? "active" : ""}" aria-pressed="${tab === id}">${label}${id === "brainstorm" && ideas.cards.length ? `<span>${ideas.cards.length}</span>` : ""}${id === "moodboard" && ideas.moodboard.length ? `<span>${ideas.moodboard.length}</span>` : ""}</button>`).join("")}</nav><div class="ideation-content">${body}</div></div>`;
     const saveIdeas = async () => {
@@ -632,6 +634,118 @@
       await saveJsonFile("Ideation/ideas.json", ideas);
       if (indicator?.isConnected) indicator.textContent = "Saved locally";
     };
+    const board = $(".idea-canvas", container);
+    if (board) {
+      const world = $(".idea-canvas-world", board);
+      const viewport = board.getBoundingClientRect();
+      const previousCanvas = ideas.canvas;
+      const canvas = {
+        x: Number.isFinite(Number(previousCanvas.x)) ? Number(previousCanvas.x) : 70,
+        y: Number.isFinite(Number(previousCanvas.y)) ? Number(previousCanvas.y) : 55,
+        zoom: Number.isFinite(Number(previousCanvas.zoom)) ? Math.max(0.25, Math.min(2.5, Number(previousCanvas.zoom))) : 1
+      };
+      ideas.canvas = canvas;
+      ideas.cards.forEach((card, index) => {
+        if (ideas.canvasVersion !== 1) {
+          card.x = Number.isFinite(Number(card.x)) ? Number(card.x) * viewport.width / 100 : 50 + index % 3 * 320;
+          card.y = Number.isFinite(Number(card.y)) ? Number(card.y) : 50 + Math.floor(index / 3) * 230;
+        } else {
+          card.x = Number.isFinite(Number(card.x)) ? Number(card.x) : 50 + index % 3 * 320;
+          card.y = Number.isFinite(Number(card.y)) ? Number(card.y) : 50 + Math.floor(index / 3) * 230;
+        }
+        const note = $(`[data-idea-card="${CSS.escape(card.id)}"]`, board);
+        if (note) {
+          note.style.left = `${card.x}px`;
+          note.style.top = `${card.y}px`;
+        }
+      });
+      const updateWorld = () => {
+        world.style.transform = `translate(${canvas.x}px, ${canvas.y}px) scale(${canvas.zoom})`;
+        $("[data-canvas-zoom-level]", board).textContent = `${Math.round(canvas.zoom * 100)}%`;
+      };
+      updateWorld();
+      if (ideas.canvasVersion !== 1) {
+        ideas.canvasVersion = 1;
+        void saveIdeas();
+      }
+      const setZoom = (zoom, clientX, clientY) => {
+        const nextZoom = Math.max(0.25, Math.min(2.5, zoom));
+        const rect = board.getBoundingClientRect();
+        clientX = clientX ?? rect.left + rect.width / 2;
+        clientY = clientY ?? rect.top + rect.height / 2;
+        const offsetX = clientX - rect.left;
+        const offsetY = clientY - rect.top;
+        const worldX = (offsetX - canvas.x) / canvas.zoom;
+        const worldY = (offsetY - canvas.y) / canvas.zoom;
+        canvas.zoom = nextZoom;
+        canvas.x = offsetX - worldX * nextZoom;
+        canvas.y = offsetY - worldY * nextZoom;
+        updateWorld();
+      };
+      $$("[data-canvas-zoom-in]", board).forEach(button => button.addEventListener("click", () => {
+        setZoom(canvas.zoom * 1.2);
+        void saveIdeas();
+      }));
+      $$("[data-canvas-zoom-out]", board).forEach(button => button.addEventListener("click", () => {
+        setZoom(canvas.zoom / 1.2);
+        void saveIdeas();
+      }));
+      $$("[data-canvas-zoom-reset]", board).forEach(button => button.addEventListener("click", () => {
+        setZoom(1);
+        void saveIdeas();
+      }));
+      $$("[data-canvas-fit]", board).forEach(button => button.addEventListener("click", () => {
+        if (!ideas.cards.length) {
+          canvas.x = 70;
+          canvas.y = 55;
+          canvas.zoom = 1;
+        } else {
+          const notes = ideas.cards.map(card => {
+            const note = $(`[data-idea-card="${CSS.escape(card.id)}"]`, board);
+            return { x: card.x, y: card.y, width: note?.offsetWidth || 270, height: note?.offsetHeight || 200 };
+          });
+          const minX = Math.min(...notes.map(note => note.x));
+          const minY = Math.min(...notes.map(note => note.y));
+          const maxX = Math.max(...notes.map(note => note.x + note.width));
+          const maxY = Math.max(...notes.map(note => note.y + note.height));
+          canvas.zoom = Math.max(0.25, Math.min(1.5, (board.clientWidth - 80) / (maxX - minX), (board.clientHeight - 100) / (maxY - minY)));
+          canvas.x = (board.clientWidth - (maxX - minX) * canvas.zoom) / 2 - minX * canvas.zoom;
+          canvas.y = (board.clientHeight - (maxY - minY) * canvas.zoom) / 2 - minY * canvas.zoom;
+        }
+        updateWorld();
+        void saveIdeas();
+      }));
+      board.addEventListener("wheel", event => {
+        if (event.target.closest("input,textarea")) return;
+        event.preventDefault();
+        setZoom(canvas.zoom * Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
+        clearTimeout(timer);
+        timer = setTimeout(() => void saveIdeas(), 350);
+      }, { passive: false });
+      board.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || event.target.closest(".idea-note,.idea-canvas-tools")) return;
+        event.preventDefault();
+        board.setPointerCapture(event.pointerId);
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const originX = canvas.x;
+        const originY = canvas.y;
+        const move = pointerEvent => {
+          canvas.x = originX + pointerEvent.clientX - startX;
+          canvas.y = originY + pointerEvent.clientY - startY;
+          updateWorld();
+        };
+        const finish = () => {
+          board.removeEventListener("pointermove", move);
+          board.removeEventListener("pointerup", finish);
+          board.removeEventListener("pointercancel", finish);
+          void saveIdeas();
+        };
+        board.addEventListener("pointermove", move);
+        board.addEventListener("pointerup", finish, { once: true });
+        board.addEventListener("pointercancel", finish, { once: true });
+      });
+    }
     let timer;
     const captureSeedFields = () => {
       $$("[data-idea-field]", container).forEach(field => { ideas[field.dataset.ideaField] = field.value; });
@@ -655,7 +769,7 @@
     $("[data-add-idea-card]", container)?.addEventListener("click", async () => {
       await flushPendingSave();
       const index = ideas.cards.length;
-      ideas.cards.push({ id: crypto.randomUUID(), title: "", body: "", x: 4 + index % 3 * 31, y: 18 + Math.floor(index / 3) * 210 });
+      ideas.cards.push({ id: crypto.randomUUID(), title: "", body: "", x: 50 + index % 3 * 320, y: 50 + Math.floor(index / 3) * 230 });
       await saveIdeas();
       renderIdeationModule(container);
       $("[data-card-title]", container)?.focus();
@@ -681,16 +795,16 @@
       if (!card || !board) return;
       event.preventDefault();
       grip.setPointerCapture(event.pointerId);
-      const rect = board.getBoundingClientRect();
       const startX = event.clientX;
       const startY = event.clientY;
       const originX = Number(card.x) || 0;
       const originY = Number(card.y) || 0;
       const move = pointerEvent => {
-        card.x = Math.max(0, Math.min(82, originX + (pointerEvent.clientX - startX) / rect.width * 100));
-        card.y = Math.max(0, Math.min(rect.height - 185, originY + pointerEvent.clientY - startY));
+        const zoom = ideas.canvas.zoom;
+        card.x = Math.max(0, originX + (pointerEvent.clientX - startX) / zoom);
+        card.y = Math.max(0, originY + (pointerEvent.clientY - startY) / zoom);
         const note = $(`[data-idea-card="${CSS.escape(card.id)}"]`, container);
-        if (note) { note.style.left = `${card.x}%`; note.style.top = `${card.y}px`; }
+        if (note) { note.style.left = `${card.x}px`; note.style.top = `${card.y}px`; }
       };
       const finish = async () => {
         grip.removeEventListener("pointermove", move);
