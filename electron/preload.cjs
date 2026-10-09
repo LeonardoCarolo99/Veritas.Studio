@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("veritasDesktop", Object.freeze({
   createProjectFolder: (parentPath, folderName) => ipcRenderer.invoke("veritas:create-project-folder", parentPath, folderName),
   readProject: rootPath => ipcRenderer.invoke("veritas:read-project", rootPath),
   writeProjectFile: (rootPath, relativePath, content) => ipcRenderer.invoke("veritas:write-project-file", rootPath, relativePath, content),
+  renameProjectFile: (rootPath, oldPath, newPath) => ipcRenderer.invoke("veritas:rename-project-file", rootPath, oldPath, newPath),
+  deleteProjectFile: (rootPath, relativePath) => ipcRenderer.invoke("veritas:delete-project-file", rootPath, relativePath),
   checkForUpdates: () => ipcRenderer.invoke("veritas:check-for-updates"),
   getUpdateState: () => ipcRenderer.invoke("veritas:get-update-state"),
   installUpdate: () => ipcRenderer.invoke("veritas:install-update"),

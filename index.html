@@ -48,16 +48,18 @@
               <div><span class="eyebrow">YOUR WORKSPACE</span><h2>Project binder</h2></div>
               <div class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="binder" title="Drag to dock binder" aria-label="Drag to dock binder">⠿</button><button class="icon-button small" data-collapse="left" title="Hide sidebar" aria-label="Hide sidebar">‹</button></div>
             </div>
-            <button class="binder-add-button" id="new-menu" type="button" title="Add a new element to this project"><span aria-hidden="true">＋</span> Add to project</button>
+            <button class="binder-add-button" id="new-menu" type="button" title="Add a new element to this project"><span class="add-glyph" aria-hidden="true"></span> Add to project</button>
             <div class="binder-scroll">
-              <div class="tree-heading"><span>MANUSCRIPT</span><button class="text-button" id="new-chapter" title="New chapter">＋</button></div>
-              <div id="chapter-list" class="tree-list"></div>
-              <div class="tree-heading worldbuilding-heading"><span>WORLDBUILDING</span><button class="text-button" id="new-lore" title="New worldbuilding entry">＋</button></div>
-              <div class="tree-subheading">CHARACTERS</div><div id="character-list" class="tree-list"></div>
-              <div class="tree-subheading">LOCATIONS</div><div id="location-list" class="tree-list"></div>
-              <div class="tree-subheading">FACTIONS</div><div id="faction-list" class="tree-list"></div>
-              <div class="tree-heading"><span>TIMELINES</span><button class="text-button" id="new-timeline">＋</button></div>
-              <div id="timeline-list" class="tree-list"></div>
+              <div class="tree-heading"><button class="tree-disclosure" type="button" data-binder-toggle="chapters" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>MANUSCRIPT</span></button><button class="text-button" id="new-chapter" type="button" title="New chapter" aria-label="New chapter"><span class="add-glyph" aria-hidden="true"></span></button></div>
+              <div id="chapter-list" class="tree-list" data-binder-content="chapters"></div>
+              <div class="tree-heading worldbuilding-heading"><button class="tree-disclosure" type="button" data-binder-toggle="worldbuilding" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>WORLDBUILDING</span></button><button class="text-button" id="new-lore" type="button" title="New worldbuilding entry" aria-label="New worldbuilding entry"><span class="add-glyph" aria-hidden="true"></span></button></div>
+              <div data-binder-content="worldbuilding">
+                <div class="tree-subheading"><button class="tree-disclosure" type="button" data-binder-toggle="characters" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>CHARACTERS</span></button></div><div id="character-list" class="tree-list" data-binder-content="characters"></div>
+                <div class="tree-subheading tree-subheading-divider"><button class="tree-disclosure" type="button" data-binder-toggle="locations" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>LOCATIONS</span></button></div><div id="location-list" class="tree-list" data-binder-content="locations"></div>
+                <div class="tree-subheading tree-subheading-divider"><button class="tree-disclosure" type="button" data-binder-toggle="factions" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>FACTIONS</span></button></div><div id="faction-list" class="tree-list" data-binder-content="factions"></div>
+              </div>
+              <div class="tree-heading"><button class="tree-disclosure" type="button" data-binder-toggle="timelines" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>TIMELINES</span></button><button class="text-button" id="new-timeline" type="button" title="New timeline" aria-label="New timeline"><span class="add-glyph" aria-hidden="true"></span></button></div>
+              <div id="timeline-list" class="tree-list" data-binder-content="timelines"></div>
             </div>
             <div class="binder-footer"><span class="keyboard-key">⌘</span> <span class="keyboard-key">P</span><span>Quick switch</span><span class="footer-spacer"></span><button class="icon-button small" id="settings-button" title="Vault settings">⚙</button></div>
           </section>
@@ -156,12 +158,12 @@
                 </div>
               </section>
               <section class="inspector-section timeline-widget" data-panel="timeline">
-                <div class="section-title"><h3>Story timeline</h3><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="timeline" title="Drag to dock timeline">⠿</button><button class="text-button" id="add-event">＋</button></span></div>
+                <div class="section-title"><h3>Story timeline</h3><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="timeline" title="Drag to dock timeline">⠿</button><button class="text-button" id="add-event" type="button" title="Add timeline event" aria-label="Add timeline event"><span class="add-glyph" aria-hidden="true"></span></button></span></div>
                 <div class="timeline-track" id="timeline-events"></div>
                 <button class="outline-button" id="open-timeline">Open plot planner</button>
               </section>
               <section class="inspector-section lore-widget" data-panel="lore">
-                <div class="section-title"><h3>Worldbuilding</h3><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="lore" title="Drag to dock worldbuilding">⠿</button><button class="text-button" id="new-lore-inline">＋</button></span></div>
+                <div class="section-title"><h3>Worldbuilding</h3><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="lore" title="Drag to dock worldbuilding">⠿</button><button class="text-button" id="new-lore-inline" type="button" title="New worldbuilding entry" aria-label="New worldbuilding entry"><span class="add-glyph" aria-hidden="true"></span></button></span></div>
                 <p class="section-caption">Keep your world's details close at hand.</p>
                 <div id="related-lore" class="related-lore"></div>
               </section>

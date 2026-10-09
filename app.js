@@ -6,6 +6,7 @@
   const STORAGE_KEY = "veritas-studio-vault";
   const PROJECTS_KEY = "veritas-studio-projects";
   const PROJECT_DATA_PREFIX = "veritas-studio-project:";
+  const BINDER_COLLAPSE_KEY = "veritas-studio-binder-collapse";
   const desktop = window.veritasDesktop;
   if (desktop) document.documentElement.classList.add("desktop-app");
   const MODULES = [
@@ -73,8 +74,10 @@
       editorWidth: "comfortable",
       uiScale: 1,
       dailyGoal: DEFAULT_GOAL
-    }
+    },
+    collapsedBinderGroups: {}
   };
+  let binderCollapseLoaded = false;
 
   const starterFiles = [
     { path: "Manuscript/01 - The Cartographer's Silence.md", content: "# The Cartographer's Silence\n\nThe map was wrong.\n\nMara Venn knew it the moment she crossed the old bridge and saw the river running east. On every chart in the archive, it ran west. She stood in the rain with the atlas tucked beneath her coat, watching the water carry the last leaves of autumn toward a city that should not exist.\n\nBehind her, the bells of Asterfall rang thirteen times.\n\nShe had been told the thirteenth bell was only a story. She had also been told never to trust a map that drew the coast in gold.\n\nA boot scraped stone in the alley behind her.\n\n“Miss Venn,” called a voice she recognized from the royal observatory. “You have something that belongs to the Crown.”\n\nMara closed the atlas. Its leather cover was warm, almost feverish, beneath her palm.\n\n“Then the Crown should have kept better records,” she said, and ran." },
@@ -1627,6 +1630,22 @@
   }
 
   function renderBinder() {
+    if (!binderCollapseLoaded) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(BINDER_COLLAPSE_KEY) || "{}");
+        state.collapsedBinderGroups = saved && typeof saved === "object" ? saved : {};
+      } catch (error) {
+        console.error("Could not load binder category preferences.", error);
+        state.collapsedBinderGroups = {};
+      }
+      binderCollapseLoaded = true;
+    }
+    $$("[data-binder-toggle]").forEach(button => {
+      const collapsed = Boolean(state.collapsedBinderGroups[button.dataset.binderToggle]);
+      button.setAttribute("aria-expanded", String(!collapsed));
+      const content = $(`[data-binder-content="${button.dataset.binderToggle}"]`);
+      if (content) content.hidden = collapsed;
+    });
     const sets = {
       chapter: $("#chapter-list"),
       character: $("#character-list"),
@@ -1654,10 +1673,262 @@
         }
         openFile(path);
       });
+      item.addEventListener("contextmenu", event => {
+        event.preventDefault();
+        showBinderContextMenu(path, event.clientX, event.clientY);
+      });
       sets[bucket].append(item);
     });
     Object.entries(sets).forEach(([type, container]) => {
       if (!container.children.length) container.innerHTML = `<div class="empty-hint">No ${type === "chapter" ? "chapters" : `${type}s`} yet.</div>`;
+    });
+  }
+
+  function showBinderContextMenu(path, x, y) {
+    $(".context-menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "context-menu";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = '<button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>';
+    positionContextMenu(menu, x, y);
+    menu.addEventListener("click", event => {
+      const action = event.target.closest("[data-binder-action]")?.dataset.binderAction;
+      menu.remove();
+      if (action === "rename") void renameBinderFile(path);
+      else if (action === "delete") void deleteBinderFile(path);
+    });
+    $("button", menu).focus();
+    setTimeout(() => document.addEventListener("click", function dismiss(event) {
+      if (!menu.isConnected || !menu.contains(event.target)) {
+        menu.remove();
+        document.removeEventListener("click", dismiss);
+      }
+    }), 0);
+  }
+
+  function showEditorContextMenu(x, y) {
+    $(".context-menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "context-menu editor-context-menu";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = `<button type="button" role="menuitem" data-editor-context-action="undo">Undo <kbd>Ctrl+Z</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="redo">Redo <kbd>Ctrl+Y</kbd></button>
+      <div role="separator"></div>
+      <button type="button" role="menuitem" data-editor-context-action="bold">Bold <kbd>Ctrl+B</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="italic">Italic <kbd>Ctrl+I</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="cut">Cut <kbd>Ctrl+X</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="copy">Copy <kbd>Ctrl+C</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="paste">Paste <kbd>Ctrl+V</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="insertUnorderedList">Bulleted list</button>
+      <button type="button" role="menuitem" data-editor-context-action="insertOrderedList">Numbered list</button>
+      <button type="button" role="menuitem" data-editor-context-action="formatBlock" data-command-value="h2">Heading 2</button>
+      <button type="button" role="menuitem" data-editor-context-action="formatBlock" data-command-value="blockquote">Quote</button>
+      <div role="separator"></div>
+      <button type="button" role="menuitem" data-editor-context-action="selectAll">Select all <kbd>Ctrl+A</kbd></button>
+      <button type="button" role="menuitem" data-editor-context-action="find">Find and replace… <kbd>Ctrl+H</kbd></button>`;
+    positionContextMenu(menu, x, y);
+    menu.addEventListener("click", event => {
+      const button = event.target.closest("[data-editor-context-action]");
+      if (!button) return;
+      menu.remove();
+      restoreEditorSelection();
+      const action = button.dataset.editorContextAction;
+      if (action === "find") openFindReplace();
+      else if (action === "selectAll") {
+        $("#rich-document-content").focus();
+        document.execCommand("selectAll");
+      } else if (action === "copy" || action === "cut") {
+        $("#rich-document-content").focus();
+        document.execCommand(action);
+        if (action === "cut") {
+          syncRichEditor();
+          markDirty();
+        }
+      } else if (action === "paste") {
+        void pasteIntoEditor();
+      } else {
+        runEditorCommand(action, button.dataset.commandValue ? `<${button.dataset.commandValue}>` : "");
+      }
+    });
+    $("button", menu).focus();
+    setTimeout(() => document.addEventListener("click", function dismiss(event) {
+      if (!menu.isConnected || !menu.contains(event.target)) {
+        menu.remove();
+        document.removeEventListener("click", dismiss);
+      }
+    }), 0);
+  }
+
+  function positionContextMenu(menu, x, y) {
+    menu.style.left = `${Math.max(8, x)}px`;
+    menu.style.top = `${Math.max(8, y)}px`;
+    document.body.append(menu);
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - rect.height - 8))}px`;
+  }
+
+  async function pasteIntoEditor() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      restoreEditorSelection();
+      document.execCommand("insertHTML", false, escapeHtml(text).replace(/\r\n?|\n/g, "<br>"));
+      syncRichEditor();
+      markDirty();
+    } catch (error) {
+      console.error("Could not read text from the clipboard.", error);
+      notify(`Could not paste from the clipboard: ${error.message}`);
+    }
+  }
+
+  async function renameBinderFile(path) {
+    const oldName = basename(path);
+    const newName = await promptDialog("Rename document", "Document name", oldName);
+    if (newName === null) return;
+    if (!newName || /[\\/]/.test(newName) || newName === "." || newName === "..") {
+      notify("Enter a valid document name without path separators.");
+      return;
+    }
+    const extension = path.slice(path.lastIndexOf("."));
+    const newPath = `${path.slice(0, path.lastIndexOf("/") + 1)}${newName}${extension}`;
+    if (newPath.toLowerCase() === path.toLowerCase()) return;
+    if ([...state.files.keys()].some(file => file.toLowerCase() === newPath.toLowerCase())) {
+      notify("A document with that name already exists in this category.");
+      return;
+    }
+    if (state.activePath === path && state.dirty) {
+      await saveActiveFile();
+      if (state.dirty) return;
+    }
+    const oldCompanion = companionPath(path);
+    const newCompanion = companionPath(newPath);
+    const hasCompanion = state.files.has(oldCompanion);
+    try {
+      if (state.dirHandle) {
+        await renameVaultFile(path, newPath, state.files.get(path));
+        if (hasCompanion) {
+          try {
+            await renameVaultFile(oldCompanion, newCompanion, state.files.get(oldCompanion));
+          } catch (error) {
+            await renameVaultFile(newPath, path, state.files.get(path));
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Could not rename binder document.", error);
+      notify(`Could not rename document: ${error.message}`);
+      return;
+    }
+    state.files.set(newPath, state.files.get(path));
+    state.files.delete(path);
+    if (hasCompanion) {
+      state.files.set(newCompanion, state.files.get(oldCompanion));
+      state.files.delete(oldCompanion);
+    }
+    state.tabs = state.tabs.map(tab => tab === path ? newPath : tab);
+    if (state.activePath === path) state.activePath = newPath;
+    if (state.splitPath === path) state.splitPath = newPath;
+    persistBrowserState();
+    renderAll();
+    if (state.activePath === newPath) openFile(newPath);
+    notify("Document renamed");
+  }
+
+  async function deleteBinderFile(path) {
+    if (!await confirmDialog(`Delete “${basename(path)}”? This cannot be undone.`)) return;
+    if (state.activePath === path && state.dirty) {
+      await saveActiveFile();
+      if (state.dirty) return;
+    }
+    const oldCompanion = companionPath(path);
+    const hasCompanion = state.files.has(oldCompanion);
+    try {
+      if (state.dirHandle) {
+        await deleteVaultFile(path);
+        if (hasCompanion) {
+          try {
+            await deleteVaultFile(oldCompanion);
+          } catch (error) {
+            await writeVaultFile(path, state.files.get(path));
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Could not delete binder document.", error);
+      notify(`Could not delete document: ${error.message}`);
+      return;
+    }
+    state.files.delete(path);
+    if (hasCompanion) state.files.delete(oldCompanion);
+    state.tabs = state.tabs.filter(tab => tab !== path);
+    if (state.splitPath === path) {
+      state.splitPath = "";
+      $("#split-surface").hidden = true;
+      $("#editor-layout").classList.remove("vertical");
+    }
+    if (state.activePath === path) state.activePath = "";
+    persistBrowserState();
+    renderAll();
+    if (!state.activePath) {
+      const nextPath = state.tabs.at(-1) || [...state.files.keys()].find(file => file.endsWith(".md"));
+      if (nextPath) openFile(nextPath);
+      else {
+        $("#document-title").value = "";
+        $("#document-content").value = "";
+        $("#document-content").hidden = true;
+        $("#rich-document-content").innerHTML = "";
+        $("#rich-document-content").hidden = false;
+        state.dirty = false;
+        renderTabs();
+        updateStats();
+      }
+    }
+    notify("Document deleted");
+  }
+
+  async function renameVaultFile(oldPath, newPath, content) {
+    if (desktop) return desktop.renameProjectFile(state.dirHandle.path, oldPath, newPath);
+    const directory = await getVaultDirectory(oldPath);
+    const newDirectory = await getVaultDirectory(newPath);
+    const oldName = oldPath.split("/").pop();
+    const newName = newPath.split("/").pop();
+    await directory.getFileHandle(oldName);
+    try {
+      await newDirectory.getFileHandle(newName);
+      throw new Error("A project file with that name already exists.");
+    } catch (error) {
+      if (error.name !== "NotFoundError") throw error;
+    }
+    await writeDirectoryFile(state.dirHandle, newPath, content);
+    await directory.removeEntry(oldName);
+  }
+
+  async function deleteVaultFile(path) {
+    if (desktop) return desktop.deleteProjectFile(state.dirHandle.path, path);
+    const directory = await getVaultDirectory(path);
+    await directory.removeEntry(path.split("/").pop());
+  }
+
+  async function getVaultDirectory(path) {
+    let directory = state.dirHandle;
+    for (const part of path.split("/").slice(0, -1)) directory = await directory.getDirectoryHandle(part);
+    return directory;
+  }
+
+  function confirmDialog(message) {
+    return new Promise(resolve => {
+      const backdrop = document.createElement("div");
+      backdrop.className = "dialog-backdrop";
+      backdrop.innerHTML = `<section class="dialog-card" role="alertdialog" aria-modal="true"><h3>Confirm deletion</h3><p>${escapeHtml(message)}</p><div class="dialog-actions"><button type="button" data-cancel>Cancel</button><button type="button" class="primary" data-confirm-delete>Delete</button></div></section>`;
+      const finish = value => { backdrop.remove(); resolve(value); };
+      $("[data-cancel]", backdrop).addEventListener("click", () => finish(false));
+      $("[data-confirm-delete]", backdrop).addEventListener("click", () => finish(true));
+      backdrop.addEventListener("click", event => { if (event.target === backdrop) finish(false); });
+      document.body.append(backdrop);
+      $("[data-cancel]", backdrop).focus();
     });
   }
 
@@ -2418,9 +2689,6 @@
     };
     input.addEventListener("input", render);
     modal.addEventListener("click", event => { if (event.target === modal) modal.remove(); });
-    document.addEventListener("keydown", function closeOnEscape(event) {
-      if (event.key === "Escape" && modal.isConnected) { modal.remove(); document.removeEventListener("keydown", closeOnEscape); }
-    });
     document.body.append(modal);
     render();
     input.focus();
@@ -2546,7 +2814,7 @@
       menu.remove();
       if (action) runMenuAction(action);
     });
-    document.body.append(menu);
+
     document.addEventListener("click", function dismiss(event) {
       if (!menu.isConnected || (!menu.contains(event.target) && !event.target.closest(".menu-bar-item"))) {
         menu.remove();
@@ -2783,6 +3051,10 @@
       syncRichEditor();
       markDirty();
     });
+    $("#rich-document-content").addEventListener("contextmenu", event => {
+      event.preventDefault();
+      showEditorContextMenu(event.clientX, event.clientY);
+    });
     $("#rich-document-content").addEventListener("paste", event => {
       const text = event.clipboardData?.getData("text/plain");
       if (text === undefined) return;
@@ -2837,6 +3109,20 @@
     $("#new-lore-inline").addEventListener("click", () => showNewLoreMenu());
     $("#new-timeline").addEventListener("click", () => newFile("timeline"));
     $("#new-menu").addEventListener("click", () => showNewLoreMenu());
+    $$("[data-binder-toggle]").forEach(button => button.addEventListener("click", () => {
+      const group = button.dataset.binderToggle;
+      state.collapsedBinderGroups[group] = !state.collapsedBinderGroups[group];
+      const collapsed = state.collapsedBinderGroups[group];
+      button.setAttribute("aria-expanded", String(!collapsed));
+      const content = $(`[data-binder-content="${group}"]`);
+      if (content) content.hidden = collapsed;
+      try {
+        localStorage.setItem(BINDER_COLLAPSE_KEY, JSON.stringify(state.collapsedBinderGroups));
+      } catch (error) {
+        console.error("Could not save binder category preferences.", error);
+        notify("Could not save binder category preferences.");
+      }
+    }));
     $("#add-event").addEventListener("click", () => void addTimelineEvent());
     $("#open-timeline").addEventListener("click", () => {
       openPlotPlannerView();
@@ -2848,6 +3134,16 @@
       document.body.classList.toggle(button.dataset.collapse === "left" ? "left-hidden" : "right-hidden");
     }));
     document.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        const popup = $$(".context-menu, .menu-popover, .search-modal, .dialog-backdrop").at(-1);
+        if (popup) {
+          event.preventDefault();
+          const closeButton = popup.querySelector("[data-cancel], [data-close], [data-close-manager], [data-close-find], [data-close-export], [data-close-settings], [data-close-schema]");
+          if (closeButton) closeButton.click();
+          else popup.remove();
+          return;
+        }
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") { event.preventDefault(); setupSearch(); }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void saveActiveFile(); }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "h") { event.preventDefault(); openFindReplace(); }
@@ -3109,7 +3405,7 @@
       menu.remove();
       if (type) newFile(type);
     });
-    document.body.append(menu);
+
     setTimeout(() => document.addEventListener("click", function dismiss(event) {
       if (!menu.isConnected || (!menu.contains(event.target) && event.target !== button && !event.target.closest("#new-lore,#new-lore-inline"))) {
         menu.remove();

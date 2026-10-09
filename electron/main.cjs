@@ -93,6 +93,18 @@ async function ensureSafeParent(root, segments) {
   return directory;
 }
 
+async function getExistingSafeParent(root, segments) {
+  let directory = root;
+  for (const segment of segments) {
+    directory = path.join(directory, segment);
+    const info = await fs.lstat(directory);
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      throw new Error("Project paths cannot contain links or non-directory entries.");
+    }
+  }
+  return directory;
+}
+
 async function readProjectFiles(directory, prefix = "") {
   const files = [];
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
@@ -148,6 +160,39 @@ function registerProjectFileHandlers() {
       if (error.code !== "ENOENT") throw error;
     }
     await fs.writeFile(target, content, "utf8");
+  });
+
+  registerHandler("veritas:rename-project-file", async (rootPath, oldPath, newPath) => {
+    const approvedRoot = await requireApprovedProject(rootPath);
+    const source = resolveVaultFile(approvedRoot, oldPath);
+    const destination = resolveVaultFile(approvedRoot, newPath);
+    if (source.segments.length !== destination.segments.length ||
+        source.segments.slice(0, -1).join("/") !== destination.segments.slice(0, -1).join("/") ||
+        path.extname(source.target).toLowerCase() !== path.extname(destination.target).toLowerCase()) {
+      throw new Error("Project files can only be renamed within their current category.");
+    }
+    const parent = await getExistingSafeParent(source.root, source.segments.slice(0, -1));
+    const sourcePath = path.join(parent, source.segments.at(-1));
+    const destinationPath = path.join(parent, destination.segments.at(-1));
+    const sourceInfo = await fs.lstat(sourcePath);
+    if (sourceInfo.isSymbolicLink() || !sourceInfo.isFile()) throw new Error("Only regular project files can be renamed.");
+    try {
+      await fs.lstat(destinationPath);
+      throw new Error("A project file with that name already exists.");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    await fs.rename(sourcePath, destinationPath);
+  });
+
+  registerHandler("veritas:delete-project-file", async (rootPath, relativePath) => {
+    const approvedRoot = await requireApprovedProject(rootPath);
+    const { root, segments } = resolveVaultFile(approvedRoot, relativePath);
+    const parent = await getExistingSafeParent(root, segments.slice(0, -1));
+    const target = path.join(parent, segments.at(-1));
+    const info = await fs.lstat(target);
+    if (info.isSymbolicLink() || !info.isFile()) throw new Error("Only regular project files can be deleted.");
+    await fs.unlink(target);
   });
 }
 
