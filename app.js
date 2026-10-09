@@ -69,6 +69,7 @@
     publishingTab: "overview",
     ideationTab: "seed",
     proofreadPath: "",
+    localAiCritique: null,
     editorSelection: null,
     plannerDragging: null,
     preferences: {
@@ -1096,8 +1097,17 @@
     const chapters = [...state.files.keys()].filter(path => /^Manuscript\/.+\.md$/i.test(path)).sort((a, b) => a.localeCompare(b));
     const selectedPath = chapters.includes(state.proofreadPath) ? state.proofreadPath : chapters.includes(state.activePath) ? state.activePath : chapters[0] || "";
     state.proofreadPath = selectedPath;
+    if (state.localAiCritique?.chapterPath !== selectedPath) state.localAiCritique = null;
     const chapterOptions = chapters.map(path => `<option value="${escapeHtml(path)}" ${path === selectedPath ? "selected" : ""}>${escapeHtml(basename(path))}</option>`).join("");
     container.innerHTML = `${modulePage("editing", "Revision desk", "Track manuscript checkpoints, run a proofreading pass, and keep editorial focus visible.", '<button class="button-primary" data-save-revision>Save version snapshot</button>')}
+      <section class="module-card local-ai-card">
+        <div class="module-card-heading"><div><span class="eyebrow">LOCAL AI · PRIVATE INFERENCE</span><h2>Scene & chapter critique</h2><p class="proofreading-intro">Run a deep developmental critique on your device. Chapter text is sent only to the local inference engine and is not uploaded. For this PC, start with a 7B–8B Q4 GGUF. CUDA is preferred, with Vulkan GPU acceleration as a fallback; CPU-only inference is disabled. Importing copies the model (often several GB) into Veritas local data. Split GGUF models are imported together automatically when you select any numbered shard.</p></div></div>
+        ${desktop
+          ? `<div class="local-ai-model-controls"><label for="local-ai-model">GGUF MODEL</label><select id="local-ai-model"><option value="">Checking local models…</option></select><button class="button-secondary" type="button" data-import-local-model>Import model</button></div><div class="local-ai-model-location"><span data-local-ai-location>Models are stored in this app's local data folder.</span><button class="button-secondary" type="button" data-open-local-ai-folder>Open model folder</button></div>`
+          : '<div class="empty-hint">Local model inference is available in the Veritas desktop app.</div>'}
+        <div class="local-ai-actions"><span data-local-ai-status role="status">Choose a local GGUF model to get started.</span><button class="button-primary" type="button" data-run-local-critique ${desktop && chapters.length ? "" : "disabled"}>Critique chapter</button></div>
+        <pre class="local-ai-output" data-local-ai-output aria-live="polite">${state.localAiCritique?.text ? escapeHtml(state.localAiCritique.text) : "Your critique will appear here as it is generated."}</pre>
+      </section>
       <section class="module-card proofreading-card">
         <div class="module-card-heading"><div><span class="eyebrow">PROOFREADING · RULE-BASED</span><h2>Prose diagnostics</h2><p class="proofreading-intro">Catch common typos and review possible passive voice, weasel words, filter words, adverb overuse, and repeated words. Style checks are heuristic prompts, not corrections. No AI or text is sent anywhere.</p></div><button class="button-secondary" type="button" data-run-proofread ${chapters.length ? "" : "disabled"}>Analyze chapter</button></div>
         <div class="proofreading-controls"><label for="proofread-chapter">CHAPTER</label><select id="proofread-chapter" ${chapters.length ? "" : "disabled"}>${chapterOptions || '<option value="">No manuscript chapters found</option>'}</select><span data-proofread-status>${chapters.length ? "Ready when you are" : "Add a Markdown chapter in Manuscript to get started."}</span></div>
@@ -1108,13 +1118,21 @@
         <section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">REVISION HISTORY</span><h2>Snapshots</h2></div><span class="stat-pill">${data.snapshots.length} saved</span></div><div class="revision-list">${data.snapshots.length ? data.snapshots.map(item => `<article class="revision-item"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.date)} · ${item.words} words · ${escapeHtml(item.chapter || "No active chapter")}</small><p>${escapeHtml(item.note || "")}</p></article>`).join("") : '<div class="empty-hint">Save a snapshot before or after a revision pass.</div>'}</div></section>
         <section class="module-card"><div class="module-card-heading"><div><span class="eyebrow">EDITORIAL PASSES</span><h2>Revision checklist</h2></div><button class="icon-button small" data-add-checklist title="Add checklist item">＋</button></div><div class="revision-checklist">${checklist.map((item, index) => `<label><input type="checkbox" data-check-index="${index}" ${item.done ? "checked" : ""}><span>${escapeHtml(item.text)}</span><button type="button" data-remove-check="${index}" aria-label="Remove item">×</button></label>`).join("") || '<div class="empty-hint">Add focused passes such as character arcs or continuity.</div>'}</div></section>
       </div></div>`;
+    wireLocalAiControls(container, chapters.length > 0);
     if (selectedPath) renderProseMetrics(container, state.files.get(selectedPath) || "", basename(selectedPath));
     $("#proofread-chapter", container)?.addEventListener("change", event => {
       const path = event.target.value;
       state.proofreadPath = path;
+      if (state.localAiCritique?.chapterPath !== path) state.localAiCritique = null;
       if (path && state.files.has(path)) renderProseMetrics(container, state.files.get(path), basename(path));
       $("[data-proofread-status]", container).textContent = path ? "Ready when you are" : "Choose a manuscript chapter.";
       $("[data-proofread-results]", container).innerHTML = '<div class="empty-hint">Analyze the selected chapter to review proofreading and style suggestions.</div>';
+      const button = $("[data-run-local-critique]", container);
+      if (button) button.disabled = !$("#local-ai-model", container)?.value || !path;
+      const output = $("[data-local-ai-output]", container);
+      if (output) output.textContent = "Your critique will appear here as it is generated.";
+      const status = $("[data-local-ai-status]", container);
+      if (status) status.textContent = "Choose a local GGUF model to get started.";
     });
     $("[data-run-proofread]", container)?.addEventListener("click", async () => {
       if (state.dirty) await saveActiveFile();
@@ -1170,6 +1188,165 @@
       void saveJsonFile("Editing/revisions.json", data);
       renderEditingModule(container);
     }));
+  }
+
+  function updateLocalAiCritiqueView(container, requestId) {
+    const critique = state.localAiCritique;
+    if (!critique || critique.requestId !== requestId) return;
+    const output = $("[data-local-ai-output]", container);
+    const status = $("[data-local-ai-status]", container);
+    if (output) output.textContent = critique.text || (critique.status === "running" ? "Preparing local analysis…" : "Your critique will appear here as it is generated.");
+    if (status) status.textContent = critique.message;
+    const modelSelect = $("#local-ai-model", container);
+    if (modelSelect) modelSelect.disabled = critique.status === "running";
+    const importButton = $("[data-import-local-model]", container);
+    if (importButton) importButton.disabled = critique.status === "running";
+    const chapterSelect = $("#proofread-chapter", container);
+    if (chapterSelect) chapterSelect.disabled = critique.status === "running";
+    const button = $("[data-run-local-critique]", container);
+    if (button) {
+      button.disabled = critique.status === "running" || !$("#local-ai-model", container)?.value || !$("#proofread-chapter", container)?.value;
+      button.textContent = critique.status === "running" ? "Analyzing…" : "Critique chapter";
+    }
+  }
+
+  async function refreshLocalAiControls(container) {
+    if (!desktop) return;
+    const select = $("#local-ai-model", container);
+    const location = $("[data-local-ai-location]", container);
+    const status = $("[data-local-ai-status]", container);
+    if (!select) return;
+    try {
+      const result = await desktop.getLocalAiState();
+      if (!container.isConnected) return;
+      select.replaceChildren();
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = result.models.length ? "Select a local model" : "No GGUF models imported";
+      select.append(placeholder);
+      result.models.forEach(model => {
+        const option = document.createElement("option");
+        option.value = model.name;
+        option.disabled = !model.ready;
+        option.textContent = `${model.name} · ${(model.size / 1024 ** 3).toFixed(1)} GB${model.ready ? "" : " · missing shard(s)"}`;
+        option.selected = model.selected;
+        select.append(option);
+      });
+      if (location) location.textContent = `Local model folder: ${result.directory}`;
+      if (status && !state.localAiCritique) status.textContent = result.models.length
+        ? "Model stays on this device. Choose a chapter and start an analysis."
+        : "Import a GGUF model to enable local chapter critique.";
+      const button = $("[data-run-local-critique]", container);
+      if (button && !state.localAiCritique) button.disabled = !result.models.some(model => model.selected && model.ready) || !$("#proofread-chapter", container)?.value;
+      if (state.localAiCritique) updateLocalAiCritiqueView(container, state.localAiCritique.requestId);
+    } catch (error) {
+      console.error("Could not load local AI model settings.", error);
+      if (status) status.textContent = `Local model settings unavailable: ${error.message}`;
+    }
+  }
+
+  function wireLocalAiControls(container, hasChapters) {
+    if (!desktop) return;
+    const importButton = $("[data-import-local-model]", container);
+    const openFolderButton = $("[data-open-local-ai-folder]", container);
+    const modelSelect = $("#local-ai-model", container);
+    const runButton = $("[data-run-local-critique]", container);
+    const status = $("[data-local-ai-status]", container);
+    const setError = error => {
+      console.error("Local chapter critique failed.", error);
+      if (status) status.textContent = error.message || "Local chapter critique failed.";
+      notify(`Local critique failed: ${error.message || "unknown error"}`);
+    };
+
+    void refreshLocalAiControls(container);
+    openFolderButton?.addEventListener("click", async () => {
+      try {
+        await desktop.openLocalAiFolder();
+      } catch (error) {
+        console.error("Could not open the local model folder.", error);
+        notify(`Could not open the local model folder: ${error.message}`);
+      }
+    });
+    modelSelect?.addEventListener("change", async () => {
+      const button = $("[data-run-local-critique]", container);
+      if (!modelSelect.value) {
+        if (button) button.disabled = true;
+        if (status) status.textContent = "Choose an imported GGUF model.";
+        return;
+      }
+      if (button) button.disabled = true;
+      try {
+        const result = await desktop.selectLocalAiModel(modelSelect.value);
+        if (status) status.textContent = "Selected model is stored and run locally on this device.";
+        if (button) button.disabled = !result.models.some(model => model.selected && model.ready) || !hasChapters;
+      } catch (error) {
+        setError(error);
+        void refreshLocalAiControls(container);
+      }
+    });
+    importButton?.addEventListener("click", async () => {
+      importButton.disabled = true;
+      if (status) status.textContent = "Choose a GGUF model. Split models are copied with their numbered shards…";
+      try {
+        const result = await desktop.importLocalAiModel();
+        if (container.isConnected) {
+          if (status) status.textContent = result.models.length
+            ? "Model imported. Any split shards stay together and load from the first shard."
+            : "No model imported.";
+          await refreshLocalAiControls(container);
+        }
+      } catch (error) {
+        setError(error);
+      } finally {
+        if (importButton.isConnected) importButton.disabled = false;
+      }
+    });
+    runButton?.addEventListener("click", async () => {
+      if (state.dirty) await saveActiveFile();
+      const path = $("#proofread-chapter", container)?.value;
+      const text = path ? state.files.get(path) : "";
+      if (!path || !text) {
+        notify("Choose a chapter with text before requesting a critique.");
+        return;
+      }
+      const critique = {
+        requestId: crypto.randomUUID(),
+        chapterPath: path,
+        text: "",
+        status: "running",
+        message: "Preparing the local inference engine…"
+      };
+      state.localAiCritique = critique;
+      updateLocalAiCritiqueView(container, critique.requestId);
+      const stopListening = desktop.onLocalAiStream(update => {
+        if (!update || update.requestId !== critique.requestId || state.localAiCritique !== critique) return;
+        if (update.type === "chunk") critique.text += update.text;
+        else if (update.type === "status") critique.message = update.text;
+        else if (update.type === "complete") {
+          critique.status = "complete";
+          critique.message = "Critique complete · generated locally on this device.";
+        } else if (update.type === "error") {
+          critique.status = "error";
+          critique.message = update.text;
+        }
+        updateLocalAiCritiqueView(container, critique.requestId);
+      });
+      try {
+        await desktop.analyzeLocalChapter({ requestId: critique.requestId, chapterName: basename(path), text });
+        if (critique.status === "running") {
+          critique.status = "complete";
+          critique.message = "Critique complete · generated locally on this device.";
+        }
+      } catch (error) {
+        critique.status = "error";
+        critique.message = error.message || "Local chapter critique failed.";
+        setError(error);
+      } finally {
+        stopListening();
+        updateLocalAiCritiqueView(container, critique.requestId);
+      }
+    });
+    if (state.localAiCritique) updateLocalAiCritiqueView(container, state.localAiCritique.requestId);
   }
 
   async function saveRevisionSnapshot(data, container) {

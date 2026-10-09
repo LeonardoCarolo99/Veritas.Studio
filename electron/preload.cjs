@@ -10,6 +10,17 @@ contextBridge.exposeInMainWorld("veritasDesktop", Object.freeze({
   checkForUpdates: () => ipcRenderer.invoke("veritas:check-for-updates"),
   getUpdateState: () => ipcRenderer.invoke("veritas:get-update-state"),
   installUpdate: () => ipcRenderer.invoke("veritas:install-update"),
+  getLocalAiState: () => ipcRenderer.invoke("veritas:local-ai:get-state"),
+  openLocalAiFolder: () => ipcRenderer.invoke("veritas:local-ai:open-folder"),
+  importLocalAiModel: () => ipcRenderer.invoke("veritas:local-ai:import-model"),
+  selectLocalAiModel: filename => ipcRenderer.invoke("veritas:local-ai:select-model", filename),
+  analyzeLocalChapter: request => ipcRenderer.invoke("veritas:local-ai:analyze", request),
+  onLocalAiStream: callback => {
+    if (typeof callback !== "function") throw new TypeError("Local AI stream listener must be a function.");
+    const listener = (_event, update) => callback(update);
+    ipcRenderer.on("veritas:local-ai:stream", listener);
+    return () => ipcRenderer.removeListener("veritas:local-ai:stream", listener);
+  },
   onUpdateState: callback => {
     if (typeof callback !== "function") throw new TypeError("Update state listener must be a function.");
     const listener = (_event, state) => callback(state);
