@@ -44,6 +44,7 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 
 - Rich editing for headings, emphasis, quotations, and lists
 - Manuscript files remain portable Markdown
+- Chapter-specific notes in the Inspector, saved with each project
 - Daily word goals, live word count, and reading-time estimates
 - Find and replace, undo and redo, and split-editor views
 - Themes, editor sizing, and a focused, adjustable workspace
@@ -53,7 +54,7 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 
 ### 🗺️ A world with room to grow
 
-- A binder for chapters, characters, locations, factions, and timelines
+- A binder for chapters, characters, locations, factions, timelines, and a custom-word dictionary
 - Structured worldbuilding fields with editable templates
 - **The Sorth** surfaces worldbuilding notes mentioned in your draft
 - A plot planner for story threads, events, arcs, and Surface/Shadow layers

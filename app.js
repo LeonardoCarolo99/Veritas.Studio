@@ -6,7 +6,9 @@
   const STORAGE_KEY = "veritas-studio-vault";
   const PROJECTS_KEY = "veritas-studio-projects";
   const PROJECT_DATA_PREFIX = "veritas-studio-project:";
+  const DICTIONARY_PATH = "Worldbuilding/Dictionary/dictionary.json";
   const BINDER_COLLAPSE_KEY = "veritas-studio-binder-collapse";
+  const INSPECTOR_COLLAPSE_KEY = "veritas-studio-inspector-collapse";
   const desktop = window.veritasDesktop;
   if (desktop) document.documentElement.classList.add("desktop-app");
   const MODULES = [
@@ -39,6 +41,7 @@
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const state = {
     files: new Map(),
+    manuscriptNotes: {},
     tabs: [],
     activePath: "",
     splitPath: "",
@@ -72,10 +75,13 @@
       theme: "dark",
       editorFontSize: "14",
       editorWidth: "comfortable",
+      editorZoom: 100,
       uiScale: 1,
       dailyGoal: DEFAULT_GOAL
     },
-    collapsedBinderGroups: {}
+    collapsedBinderGroups: {},
+    collapsedInspectorSections: {},
+    inspectorCollapseLoaded: false
   };
   let binderCollapseLoaded = false;
 
@@ -335,6 +341,7 @@
     } catch (error) {
       console.error("Could not load project catalog.", error);
       state.files = new Map(starterFiles.map(file => [file.path, file.content]));
+      state.manuscriptNotes = {};
       state.projectId = "recovery";
       state.projects = [{ id: state.projectId, name: "Recovery workspace", storage: "browser", modules: { writing: true } }];
       renderAll();
@@ -352,6 +359,9 @@
     state.activePath = "";
     const saved = JSON.parse(localStorage.getItem(`${PROJECT_DATA_PREFIX}${project.id}`) || "null");
     state.files = new Map((saved?.files || []).map(file => [file.path, file.content]));
+    state.manuscriptNotes = saved?.manuscriptNotes && typeof saved.manuscriptNotes === "object" && !Array.isArray(saved.manuscriptNotes)
+      ? { ...saved.manuscriptNotes }
+      : {};
     let projectConfig = {};
     try { projectConfig = JSON.parse(state.files.get("config.json") || "{}"); }
     catch (error) { console.error("Could not parse project config.json.", error); notify("Project settings could not be loaded; using stored module settings."); }
@@ -385,6 +395,7 @@
     $("#rich-document-content").innerHTML = "";
     $("#rich-document-content").hidden = false;
     $("#document-content").hidden = true;
+    renderChapterNotes();
     $("#breadcrumb").textContent = "New project";
     renderTabs();
     updateStats();
@@ -476,6 +487,91 @@
     $("[data-panel=editor]").hidden = true;
     renderTodoList($("#lifecycle-view"));
     applyModuleVisibility();
+  }
+
+  async function openDictionaryView() {
+    if (state.dirty) {
+      clearTimeout(state.saveTimer);
+      await saveActiveFile();
+      if (state.dirty) return;
+    }
+    state.currentView = "dictionary";
+    renderModuleNavigation();
+    renderBinder();
+    $("#lifecycle-view").hidden = false;
+    $("[data-panel=editor]").hidden = true;
+    renderDictionaryView($("#lifecycle-view"));
+    applyModuleVisibility();
+  }
+
+  function renderDictionaryView(container) {
+    const data = readJsonFile(DICTIONARY_PATH, { entries: [] });
+    const entries = Array.isArray(data.entries)
+      ? data.entries.filter(entry => entry && typeof entry.id === "string" && typeof entry.term === "string" && typeof entry.definition === "string")
+      : [];
+    const sortedEntries = [...entries].sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: "base" }));
+    container.innerHTML = `<header class="lifecycle-header"><div><span class="eyebrow">WORLDBUILDING</span><h1>Dictionary</h1><p>Create a glossary of invented words and the meanings they carry.</p></div></header><div class="lifecycle-content"><div class="dictionary-layout"><form class="module-card dictionary-form"><div class="module-card-heading"><div><span class="eyebrow" data-dictionary-form-label>NEW WORD</span><h2 data-dictionary-form-title>Add a definition</h2></div></div><label>WORD<input name="term" type="text" placeholder="e.g. Vael" autocomplete="off" required></label><label>DEFINITION<textarea name="definition" placeholder="What does this word mean?" required></textarea></label><div class="dictionary-form-actions"><button class="button-primary" type="submit" data-dictionary-submit>Add word</button><button class="button-secondary" type="button" data-dictionary-cancel hidden>Cancel</button></div></form><section class="module-card dictionary-entries"><div class="module-card-heading"><div><span class="eyebrow">YOUR WORDS</span><h2>Definitions</h2></div><span class="stat-pill">${entries.length} ${entries.length === 1 ? "word" : "words"}</span></div><div class="dictionary-entry-list">${sortedEntries.length ? sortedEntries.map(entry => `<article class="dictionary-entry" data-dictionary-entry="${escapeHtml(entry.id)}"><div class="dictionary-entry-heading"><h3>${escapeHtml(entry.term)}</h3><div><button class="text-button" type="button" data-dictionary-edit="${escapeHtml(entry.id)}" aria-label="Edit ${escapeHtml(entry.term)}">Edit</button><button class="todo-delete" type="button" data-dictionary-delete="${escapeHtml(entry.id)}" aria-label="Delete ${escapeHtml(entry.term)}">×</button></div></div><p>${escapeHtml(entry.definition)}</p></article>`).join("") : '<div class="empty-hint">Your dictionary is empty. Add a word and its definition to get started.</div>'}</div></section></div></div>`;
+    const form = $(".dictionary-form", container);
+    const termInput = $('input[name="term"]', form);
+    const definitionInput = $('textarea[name="definition"]', form);
+    const submitButton = $("[data-dictionary-submit]", form);
+    const cancelButton = $("[data-dictionary-cancel]", form);
+    let editingId = "";
+
+    const resetForm = () => {
+      editingId = "";
+      form.reset();
+      $("[data-dictionary-form-label]", form).textContent = "NEW WORD";
+      $("[data-dictionary-form-title]", form).textContent = "Add a definition";
+      submitButton.textContent = "Add word";
+      cancelButton.hidden = true;
+    };
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const term = termInput.value.trim();
+      const definition = definitionInput.value.trim();
+      if (!term || !definition) {
+        notify("Enter both a word and its definition.");
+        return;
+      }
+      if (entries.some(entry => entry.id !== editingId && entry.term.localeCompare(term, undefined, { sensitivity: "base" }) === 0)) {
+        notify("That word is already in your dictionary.");
+        termInput.focus();
+        return;
+      }
+      if (editingId) {
+        const entry = entries.find(item => item.id === editingId);
+        if (!entry) return;
+        entry.term = term;
+        entry.definition = definition;
+      } else {
+        entries.push({ id: crypto.randomUUID(), term, definition });
+      }
+      await saveJsonFile(DICTIONARY_PATH, { entries });
+      renderDictionaryView(container);
+    });
+
+    cancelButton.addEventListener("click", resetForm);
+    $$("[data-dictionary-edit]", container).forEach(button => button.addEventListener("click", () => {
+      const entry = entries.find(item => item.id === button.dataset.dictionaryEdit);
+      if (!entry) return;
+      editingId = entry.id;
+      termInput.value = entry.term;
+      definitionInput.value = entry.definition;
+      $("[data-dictionary-form-label]", form).textContent = "EDIT WORD";
+      $("[data-dictionary-form-title]", form).textContent = "Edit definition";
+      submitButton.textContent = "Save changes";
+      cancelButton.hidden = false;
+      termInput.focus();
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+    $$("[data-dictionary-delete]", container).forEach(button => button.addEventListener("click", async () => {
+      const remainingEntries = entries.filter(entry => entry.id !== button.dataset.dictionaryDelete);
+      if (remainingEntries.length === entries.length) return;
+      await saveJsonFile(DICTIONARY_PATH, { entries: remainingEntries });
+      renderDictionaryView(container);
+    }));
   }
 
   function renderLifecycleModule(moduleId, container) {
@@ -1196,6 +1292,7 @@
       localStorage.setItem(`${PROJECT_DATA_PREFIX}${state.projectId || "legacy"}`, JSON.stringify({
         name: activeProject()?.name || $("#project-name").textContent,
         files: [...state.files].map(([path, content]) => ({ path, content })),
+        manuscriptNotes: state.manuscriptNotes,
         dailyGoal: state.dailyGoal,
         dayStartWords: state.dayStartWords,
         dailyWords: state.dailyWords,
@@ -1209,10 +1306,31 @@
 
   function renderAll() {
     renderBinder();
+    renderInspectorSections();
     renderTimeline();
     renderRelatedLore();
     renderModuleNavigation();
     applyModuleVisibility();
+  }
+
+  function renderInspectorSections() {
+    if (!state.inspectorCollapseLoaded) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(INSPECTOR_COLLAPSE_KEY) || "{}");
+        state.collapsedInspectorSections = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+      } catch (error) {
+        console.error("Could not load inspector section preferences.", error);
+        state.collapsedInspectorSections = {};
+      }
+      state.inspectorCollapseLoaded = true;
+    }
+    $$("[data-inspector-toggle]").forEach(button => {
+      const section = button.dataset.inspectorToggle;
+      const collapsed = Boolean(state.collapsedInspectorSections[section]);
+      button.setAttribute("aria-expanded", String(!collapsed));
+      const content = $(`[data-inspector-content="${section}"]`);
+      if (content) content.hidden = collapsed;
+    });
   }
 
   function applyModuleVisibility() {
@@ -1307,7 +1425,8 @@
           dailyGoal: state.dailyGoal,
           dailyWords: state.dailyWords,
           dayStartWords: state.dayStartWords,
-          sessionStart: state.sessionStart
+          sessionStart: state.sessionStart,
+          manuscriptNotes: state.manuscriptNotes
         },
         files: [...state.files].map(([path, content]) => ({ path, content }))
       };
@@ -1386,6 +1505,10 @@
     ]));
     if (!Object.values(modules).some(Boolean)) modules.writing = true;
     const snapshot = bundle.snapshot && typeof bundle.snapshot === "object" ? bundle.snapshot : {};
+    const manuscriptNotes = snapshot.manuscriptNotes && typeof snapshot.manuscriptNotes === "object" && !Array.isArray(snapshot.manuscriptNotes)
+      ? Object.fromEntries(Object.entries(snapshot.manuscriptNotes).filter(([path, note]) =>
+        typeof note === "string" && files.some(file => file.path === path && file.path.endsWith(".md") && category(file.path) === "chapter")))
+      : {};
     const project = {
       id: `project-${crypto.randomUUID()}`,
       name: bundle.project.name.trim(),
@@ -1400,7 +1523,8 @@
         dailyGoal: Number.isFinite(Number(snapshot.dailyGoal)) && Number(snapshot.dailyGoal) > 0 ? Number(snapshot.dailyGoal) : DEFAULT_GOAL,
         dailyWords: Number.isFinite(Number(snapshot.dailyWords)) && Number(snapshot.dailyWords) >= 0 ? Number(snapshot.dailyWords) : 0,
         dayStartWords: Number.isFinite(Number(snapshot.dayStartWords)) && Number(snapshot.dayStartWords) >= 0 ? Number(snapshot.dayStartWords) : 0,
-        sessionStart: Number.isFinite(Number(snapshot.sessionStart)) && Number(snapshot.sessionStart) > 0 ? Number(snapshot.sessionStart) : Date.now()
+        sessionStart: Number.isFinite(Number(snapshot.sessionStart)) && Number(snapshot.sessionStart) > 0 ? Number(snapshot.sessionStart) : Date.now(),
+        manuscriptNotes
       }
     };
   }
@@ -1514,6 +1638,7 @@
     state.projects.push(project);
     state.projectId = project.id;
     state.dirHandle = null;
+    state.manuscriptNotes = {};
     state.files = new Map([
       ["config.json", JSON.stringify({ name, dailyWordGoal: DEFAULT_GOAL, version: 1, modules: project.modules }, null, 2)],
       ["Ideation/ideas.json", JSON.stringify({ logline: "", premise: "", notes: "" }, null, 2)],
@@ -1554,6 +1679,7 @@
     state.projectId = projectId;
     state.dirHandle = null;
     state.files.clear();
+    state.manuscriptNotes = {};
     state.tabs = [];
     state.activePath = "";
     state.currentModule = project.modules?.writing ? "writing" : MODULES.find(module => project.modules?.[module.id])?.id || "writing";
@@ -1584,6 +1710,9 @@
     }
     if (!state.files.has("config.json")) state.files.set("config.json", JSON.stringify({ name: project.name, dailyWordGoal: DEFAULT_GOAL, version: 1, modules: project.modules }, null, 2));
     const snapshot = JSON.parse(localStorage.getItem(`${PROJECT_DATA_PREFIX}${project.id}`) || "null") || {};
+    state.manuscriptNotes = snapshot.manuscriptNotes && typeof snapshot.manuscriptNotes === "object" && !Array.isArray(snapshot.manuscriptNotes)
+      ? { ...snapshot.manuscriptNotes }
+      : {};
     let projectConfig = {};
     try { projectConfig = JSON.parse(state.files.get("config.json") || "{}"); }
     catch (error) { console.error("Could not parse project config.json.", error); notify("Project settings could not be loaded; using stored settings."); }
@@ -1646,6 +1775,8 @@
       const content = $(`[data-binder-content="${button.dataset.binderToggle}"]`);
       if (content) content.hidden = collapsed;
     });
+    $("#dictionary-open").classList.toggle("active", state.currentView === "dictionary");
+    $("#dictionary-open").setAttribute("aria-pressed", String(state.currentView === "dictionary"));
     const sets = {
       chapter: $("#chapter-list"),
       character: $("#character-list"),
@@ -1830,6 +1961,10 @@
     state.tabs = state.tabs.map(tab => tab === path ? newPath : tab);
     if (state.activePath === path) state.activePath = newPath;
     if (state.splitPath === path) state.splitPath = newPath;
+    if (Object.hasOwn(state.manuscriptNotes, path)) {
+      state.manuscriptNotes[newPath] = state.manuscriptNotes[path];
+      delete state.manuscriptNotes[path];
+    }
     persistBrowserState();
     renderAll();
     if (state.activePath === newPath) openFile(newPath);
@@ -1863,6 +1998,7 @@
     }
     state.files.delete(path);
     if (hasCompanion) state.files.delete(oldCompanion);
+    delete state.manuscriptNotes[path];
     state.tabs = state.tabs.filter(tab => tab !== path);
     if (state.splitPath === path) {
       state.splitPath = "";
@@ -1882,6 +2018,7 @@
         $("#rich-document-content").innerHTML = "";
         $("#rich-document-content").hidden = false;
         state.dirty = false;
+        renderChapterNotes();
         renderTabs();
         updateStats();
       }
@@ -2018,6 +2155,7 @@
     $("#rich-document-content").hidden = isJson;
     $("#document-content").hidden = !isJson;
     if (!isJson) renderMarkdownEditor($("#document-content").value);
+    renderChapterNotes();
     state.lastWordCount = words(editorBodyText());
     $("#document-type").textContent = category(path).toUpperCase() + (category(path) === "chapter" ? ` ${String([...state.files.keys()].filter(item => category(item) === "chapter").indexOf(path) + 1).padStart(2, "0")}` : "");
     $("#breadcrumb").innerHTML = `${escapeHtml(path.split("/").slice(0, -1).join(" / ") || "Vault")} <span>›</span> ${escapeHtml(basename(path))}`;
@@ -2027,6 +2165,15 @@
     renderBinder();
     updateStats();
     updateSorth();
+  }
+
+  function renderChapterNotes() {
+    const notesSection = $("#chapter-notes-section");
+    const notesInput = $("#chapter-notes");
+    const isChapter = state.activePath.endsWith(".md") && category(state.activePath) === "chapter";
+    notesSection.hidden = !isChapter;
+    notesInput.value = isChapter ? state.manuscriptNotes[state.activePath] || "" : "";
+    if (isChapter) $("#chapter-notes-context").textContent = basename(state.activePath);
   }
 
   function renderTabs() {
@@ -2188,12 +2335,12 @@
     }
     if (/^H[1-3]$/.test(element.tagName) && element.querySelector("ul,ol")) return [...element.childNodes].map(editorBlockMarkdown).filter(Boolean).join("\n");
     if (/^H[1-3]$/.test(element.tagName)) {
-      return `${"#".repeat(Number(element.tagName[1]))} ${[...element.childNodes].map(editorInlineMarkdown).join("").trim()}`;
+      return `${"#".repeat(Number(element.tagName[1]))} ${[...element.childNodes].map(editorInlineMarkdown).join("").replace(/\s+$/, "")}`;
     }
     if (element.tagName === "HR") return "---";
     if (element.tagName === "P" || element.tagName === "DIV") {
       if (element.querySelector("ul,ol")) return [...element.childNodes].map(editorBlockMarkdown).filter(Boolean).join("\n");
-      return [...element.childNodes].map(editorInlineMarkdown).join("").trim();
+      return [...element.childNodes].map(editorInlineMarkdown).join("").replace(/\s+$/, "");
     }
     return [...element.childNodes].map(editorBlockMarkdown).filter(Boolean).join("\n");
   }
@@ -2213,6 +2360,80 @@
 
   function syncRichEditor() {
     $("#document-content").value = richEditorMarkdown();
+  }
+
+  function indentEditor(target, outdent) {
+    if (target === $("#rich-document-content")) {
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      if (!target.contains(range.commonAncestorContainer)) return;
+      if (selection.anchorNode?.parentElement?.closest("li")) {
+        document.execCommand(outdent ? "outdent" : "indent");
+        syncRichEditor();
+        markDirty();
+        return;
+      }
+      range.collapse(true);
+      const node = range.startContainer;
+      if (node.nodeType !== Node.TEXT_NODE) {
+        if (outdent) {
+          const previous = node.childNodes[range.startOffset - 1];
+          if (previous?.nodeType !== Node.TEXT_NODE) return;
+          const text = previous.nodeValue || "";
+          const trailing = text.match(/ {1,2}$/)?.[0].length || 0;
+          if (!trailing) return;
+          range.setStart(previous, text.length - trailing);
+          range.setEnd(previous, text.length);
+          range.deleteContents();
+          range.collapse(true);
+        } else {
+          const indent = document.createTextNode("  ");
+          range.insertNode(indent);
+          range.setStartAfter(indent);
+          range.collapse(true);
+        }
+      } else if (outdent) {
+        const text = node.nodeValue || "";
+        const lineStart = text.lastIndexOf("\n", range.startOffset - 1) + 1;
+        const leading = text.slice(lineStart, range.startOffset).match(/^ {1,2}/)?.[0].length || 0;
+        if (!leading) return;
+        range.setStart(node, lineStart);
+        range.setEnd(node, lineStart + leading);
+        range.deleteContents();
+        range.setStart(node, range.startOffset);
+        range.collapse(true);
+      } else {
+        const indent = document.createTextNode("  ");
+        range.insertNode(indent);
+        range.setStartAfter(indent);
+        range.collapse(true);
+      }
+      selection.removeAllRanges();
+      selection.addRange(range);
+      syncRichEditor();
+      markDirty();
+      return;
+    }
+
+    const value = target.value;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    if (outdent && start === end) {
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+      const leading = value.slice(lineStart, start).match(/^ {1,2}/)?.[0].length || 0;
+      if (!leading) return;
+      target.setRangeText("", lineStart, lineStart + leading, "preserve");
+      target.setSelectionRange(start - leading, start - leading);
+    } else {
+      const selected = value.slice(start, end);
+      const replacement = selected
+        ? selected.split("\n").map(line => outdent ? line.replace(/^ {1,2}/, "") : `  ${line}`).join("\n")
+        : outdent ? selected : "  ";
+      if (replacement === selected) return;
+      target.setRangeText(replacement, start, end, selected ? "select" : "end");
+    }
+    target.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function markDirty() {
@@ -2436,6 +2657,10 @@
       if (desktop) project.folderPath = handle.path;
       if (!existing) state.projects.push(project);
       state.projectId = project.id;
+      const savedProject = JSON.parse(localStorage.getItem(`${PROJECT_DATA_PREFIX}${project.id}`) || "null");
+      state.manuscriptNotes = savedProject?.manuscriptNotes && typeof savedProject.manuscriptNotes === "object" && !Array.isArray(savedProject.manuscriptNotes)
+        ? { ...savedProject.manuscriptNotes }
+        : {};
       await saveDirectoryHandle(handle, project.id);
       await saveDirectoryHandle(handle);
       await readDirectory(handle);
@@ -3047,6 +3272,13 @@
       });
     }
     $("#document-content").addEventListener("input", markDirty);
+    $("#chapter-notes").addEventListener("input", event => {
+      if (!state.activePath.endsWith(".md") || category(state.activePath) !== "chapter") return;
+      const notes = event.currentTarget.value;
+      if (notes) state.manuscriptNotes[state.activePath] = notes;
+      else delete state.manuscriptNotes[state.activePath];
+      persistBrowserState();
+    });
     $("#rich-document-content").addEventListener("input", () => {
       syncRichEditor();
       markDirty();
@@ -3108,6 +3340,7 @@
     $("#new-lore").addEventListener("click", () => showNewLoreMenu());
     $("#new-lore-inline").addEventListener("click", () => showNewLoreMenu());
     $("#new-timeline").addEventListener("click", () => newFile("timeline"));
+    $("#dictionary-open").addEventListener("click", () => void openDictionaryView());
     $("#new-menu").addEventListener("click", () => showNewLoreMenu());
     $$("[data-binder-toggle]").forEach(button => button.addEventListener("click", () => {
       const group = button.dataset.binderToggle;
@@ -3123,6 +3356,20 @@
         notify("Could not save binder category preferences.");
       }
     }));
+    $$("[data-inspector-toggle]").forEach(button => button.addEventListener("click", () => {
+      const section = button.dataset.inspectorToggle;
+      state.collapsedInspectorSections[section] = !state.collapsedInspectorSections[section];
+      const collapsed = state.collapsedInspectorSections[section];
+      button.setAttribute("aria-expanded", String(!collapsed));
+      const content = $(`[data-inspector-content="${section}"]`);
+      if (content) content.hidden = collapsed;
+      try {
+        localStorage.setItem(INSPECTOR_COLLAPSE_KEY, JSON.stringify(state.collapsedInspectorSections));
+      } catch (error) {
+        console.error("Could not save inspector section preferences.", error);
+        notify("Could not save inspector section preferences.");
+      }
+    }));
     $("#add-event").addEventListener("click", () => void addTimelineEvent());
     $("#open-timeline").addEventListener("click", () => {
       openPlotPlannerView();
@@ -3130,10 +3377,23 @@
     $("#change-goal").addEventListener("click", () => void changeGoal());
     $("#goal-settings").addEventListener("click", () => void changeGoal());
     $("#settings-button").addEventListener("click", () => openSettingsDialog());
+    $("#editor-zoom-out").addEventListener("click", () => setEditorZoom(state.preferences.editorZoom - 10));
+    $("#editor-zoom-in").addEventListener("click", () => setEditorZoom(state.preferences.editorZoom + 10));
+    $("#editor-zoom-reset").addEventListener("click", () => setEditorZoom(100));
     $$("[data-collapse]").forEach(button => button.addEventListener("click", () => {
       document.body.classList.toggle(button.dataset.collapse === "left" ? "left-hidden" : "right-hidden");
     }));
     document.addEventListener("keydown", event => {
+      const target = event.target;
+      if (event.key === "Tab"
+        && state.currentModule === "writing"
+        && state.currentView === "editor"
+        && (target === $("#rich-document-content") || target === $("#document-content") || target === $("#split-content"))
+        && !target.hidden) {
+        event.preventDefault();
+        indentEditor(target, event.shiftKey);
+        return;
+      }
       if (event.key === "Escape") {
         const popup = $$(".context-menu, .menu-popover, .search-modal, .dialog-backdrop").at(-1);
         if (popup) {
@@ -3180,7 +3440,26 @@
     document.body.dataset.theme = state.preferences.theme || "dark";
     document.body.dataset.editorWidth = state.preferences.editorWidth || "comfortable";
     document.documentElement.style.setProperty("--editor-font-size", `${Number(state.preferences.editorFontSize) || 14}px`);
+    state.preferences.editorZoom = Math.min(160, Math.max(70, Number(state.preferences.editorZoom) || 100));
+    document.documentElement.style.setProperty("--editor-zoom", String(state.preferences.editorZoom / 100));
+    updateEditorZoomControls();
     document.documentElement.style.setProperty("--ui-scale", String(Math.min(1.3, Math.max(0.8, Number(state.preferences.uiScale) || 1))));
+  }
+
+  function setEditorZoom(zoom) {
+    state.preferences.editorZoom = Math.min(160, Math.max(70, zoom));
+    applyPreferences();
+    savePreferences();
+  }
+
+  function updateEditorZoomControls() {
+    const zoom = state.preferences.editorZoom || 100;
+    const value = $("#editor-zoom-reset");
+    if (!value) return;
+    value.textContent = `${zoom}%`;
+    value.setAttribute("aria-label", `Manuscript zoom ${zoom} percent. Reset to 100 percent.`);
+    $("#editor-zoom-out").disabled = zoom <= 70;
+    $("#editor-zoom-in").disabled = zoom >= 160;
   }
 
   function openSettingsDialog(initialCategory = "appearance") {
@@ -3206,7 +3485,7 @@
           </section>
           <section class="settings-page" data-settings-page="editor" hidden><div class="settings-page-heading"><h4>Editor</h4><p>Adjust the page for your preferred reading rhythm.</p></div>
             <label class="setting-row"><span><strong>Text size</strong><small>Markdown editing font size.</small></span><select id="setting-font-size"><option value="13">Small</option><option value="14">Default</option><option value="16">Large</option><option value="18">Extra large</option></select></label>
-            <label class="setting-row"><span><strong>Writing width</strong><small>Space available for your manuscript.</small></span><select id="setting-editor-width"><option value="narrow">Narrow</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></label>
+            <label class="setting-row"><span><strong>Writing width</strong><small>Manuscript width adapts to available editor space.</small></span><select id="setting-editor-width"><option value="narrow">Narrow</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></label>
           </section>
           <section class="settings-page" data-settings-page="writing" hidden><div class="settings-page-heading"><h4>Writing</h4><p>Set goals that keep your project moving.</p></div>
             <label class="setting-row"><span><strong>Daily word goal</strong><small>Used by the writing progress panel.</small></span><input id="setting-daily-goal" type="number" min="1" step="50"></label>
