@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest
@@ -24,7 +28,80 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish Windows installer
+      - name: Build update artifacts as a draft release
         run: npm run publish:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_DRAFT: "true"
+
+      - name: Verify update assets and publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne "v$version") {
+            throw "Release tag '$tag' does not match package version '$version'."
+          }
+
+          $assets = @(
+            @{ source = "dist\latest.yml"; name = "latest.yml" },
+            @{ source = "dist\Veritas Studio Setup $version.exe"; name = "Veritas-Studio-Setup-$version.exe" },
+            @{ source = "dist\Veritas Studio Setup $version.exe.blockmap"; name = "Veritas-Studio-Setup-$version.exe.blockmap" }
+          )
+          $missingFiles = @($assets | Where-Object { -not (Test-Path -LiteralPath $_.source -PathType Leaf) })
+          if ($missingFiles.Count -gt 0) {
+            throw "Build is missing required update files: $(($missingFiles | ForEach-Object { $_.source }) -join ', ')."
+          }
+
+          $installerName = "Veritas-Studio-Setup-$version.exe"
+          $updateInfo = Get-Content -LiteralPath "dist\latest.yml" -Raw
+          if ($updateInfo -notmatch [regex]::Escape($installerName)) {
+            throw "latest.yml does not reference the expected installer '$installerName'."
+          }
+
+          $releaseJson = gh release view $tag --json isDraft
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect the draft release '$tag'."
+          }
+          $release = $releaseJson | ConvertFrom-Json
+          if (-not $release.isDraft) {
+            throw "Release '$tag' is not a draft; refusing to modify a published release."
+          }
+
+          $uploadDirectory = Join-Path $env:RUNNER_TEMP "release-assets"
+          New-Item -ItemType Directory -Path $uploadDirectory -Force | Out-Null
+          foreach ($asset in $assets) {
+            Copy-Item -LiteralPath $asset.source -Destination (Join-Path $uploadDirectory $asset.name) -Force
+          }
+          $uploadPaths = @($assets | ForEach-Object { Join-Path $uploadDirectory $_.name })
+          gh release upload $tag @uploadPaths --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not upload all update assets to the draft release '$tag'."
+          }
+
+          $releaseJson = gh release view $tag --json isDraft,assets
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect the draft release '$tag'."
+          }
+          $release = $releaseJson | ConvertFrom-Json
+          if (-not $release.isDraft) {
+            throw "Release '$tag' is not a draft; refusing to publish unchecked assets."
+          }
+
+          $assetNames = @($release.assets | ForEach-Object { $_.name })
+          $requiredAssets = @(
+            "latest.yml",
+            "Veritas-Studio-Setup-$version.exe",
+            "Veritas-Studio-Setup-$version.exe.blockmap"
+          )
+          $missingAssets = @($requiredAssets | Where-Object { $_ -notin $assetNames })
+          if ($missingAssets.Count -gt 0) {
+            throw "Release '$tag' is missing required update assets: $($missingAssets -join ', ')."
+          }
+
+          gh release edit $tag --draft=false
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not publish the verified release '$tag'."
+          }
