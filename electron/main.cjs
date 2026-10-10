@@ -201,6 +201,34 @@ function registerLocalAiHandlers() {
     return LOCAL_AI_DIRECTORY;
   });
 
+  ipcMain.handle("veritas:local-ai:save-critique", async (event, payload) => {
+    assertTrustedSender(event);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid critique export request.");
+    const { chapterTitle, critiquedAt, critique } = payload;
+    if (typeof chapterTitle !== "string" || !chapterTitle.trim() || chapterTitle.length > 200) throw new Error("A valid chapter title is required to save the critique.");
+    if (typeof critiquedAt !== "string" || !Number.isFinite(Date.parse(critiquedAt))) throw new Error("A valid critique date is required to save the critique.");
+    if (typeof critique !== "string" || !critique.trim() || critique.length > 200000) throw new Error("There is no valid critique text to save.");
+
+    const safeTitle = chapterTitle.trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").replace(/[. ]+$/g, "") || "Chapter";
+    const date = new Date(critiquedAt);
+    const dateLabel = date.toLocaleString();
+    const filename = `${safeTitle} - Critique - ${date.toISOString().slice(0, 10)}.txt`;
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    if (!parent) throw new Error("The application window is unavailable.");
+    const result = await dialog.showSaveDialog(parent, {
+      title: "Save chapter critique",
+      defaultPath: path.join(app.getPath("documents"), filename),
+      buttonLabel: "Save critique",
+      filters: [{ name: "Text file", extensions: ["txt"] }]
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+
+    const filePath = path.extname(result.filePath).toLowerCase() === ".txt" ? result.filePath : `${result.filePath}.txt`;
+    const contents = `Chapter: ${chapterTitle.trim()}\r\nCritiqued: ${dateLabel}\r\n\r\n${critique.trim()}\r\n`;
+    await fs.writeFile(filePath, contents, { encoding: "utf8", flag: "w" });
+    return { canceled: false, filePath };
+  });
+
   ipcMain.handle("veritas:local-ai:import-model", async event => {
     assertTrustedSender(event);
     if (activeLocalAiRequest) throw new Error("Wait for the current chapter critique to finish before changing models.");

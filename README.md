@@ -45,7 +45,7 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 - Rich editing for headings, emphasis, quotations, and lists
 - Manuscript files remain portable Markdown
 - Chapter-specific notes in the Inspector, saved with each project
-- Daily word goals, live word count, and reading-time estimates
+- Daily word goals, project manuscript targets with completion estimates, live word count, and reading-time estimates
 - Find and replace, undo and redo, and split-editor views
 - Themes, editor sizing, and a focused, adjustable workspace
 
@@ -93,6 +93,8 @@ Turn on only the parts of the process you need:
 Open `index.html` in a modern browser. For direct access to a project folder, serve the app from `localhost` (for example, with VS Code Live Server); browser folder access requires a supported browser and a secure context. Choose **Open vault** to work in a folder.
 
 If folder access is unavailable, Veritas uses a browser-local vault. Browser-local projects are stored in that browser on that device; they are not automatically included in a Git checkout.
+
+The first-run **Veritas Studio Tutorial** workspace includes editable walkthroughs for chapters, chapter notes, worldbuilding entries and templates, timelines, the plot planner, and the Ideation, Editing, and Publishing modules. The lifecycle modules are optional; enable them from the project switcher to explore their guides.
 
 ### Run the Windows desktop app
 

@@ -54,6 +54,7 @@
     updateScreenDismissed: false,
     dayStartWords: 0,
     dailyGoal: DEFAULT_GOAL,
+    projectWordGoal: 0,
     sessionStart: 0,
     dirty: false,
     dailyWords: 0,
@@ -87,17 +88,24 @@
   let binderCollapseLoaded = false;
 
   const starterFiles = [
-    { path: "Manuscript/01 - The Cartographer's Silence.md", content: "# The Cartographer's Silence\n\nThe map was wrong.\n\nMara Venn knew it the moment she crossed the old bridge and saw the river running east. On every chart in the archive, it ran west. She stood in the rain with the atlas tucked beneath her coat, watching the water carry the last leaves of autumn toward a city that should not exist.\n\nBehind her, the bells of Asterfall rang thirteen times.\n\nShe had been told the thirteenth bell was only a story. She had also been told never to trust a map that drew the coast in gold.\n\nA boot scraped stone in the alley behind her.\n\n“Miss Venn,” called a voice she recognized from the royal observatory. “You have something that belongs to the Crown.”\n\nMara closed the atlas. Its leather cover was warm, almost feverish, beneath her palm.\n\n“Then the Crown should have kept better records,” she said, and ran." },
-    { path: "Manuscript/02 - The Thirteenth Bell.md", content: "# The Thirteenth Bell\n\nBy morning, the whole of Asterfall had agreed that nothing unusual had happened.\n\nThe bells had rung twelve times, as they always did. The river flowed west. The bridge was dry. And Mara Venn, cartographer, had never been seen near the archive at all.\n\nOnly Elias remembered the extra chime.\n\nHe found her at the observatory with a candle guttering beside a stack of stolen charts. Rain tapped the dome overhead. Every instrument pointed toward the dark." },
-    { path: "Worldbuilding/Characters/Mara Venn.md", content: "# Mara Venn\n\n**Role:** Cartographer and reluctant protagonist  \n**Home:** Asterfall  \n**Secret:** Can remember places that have been erased from maps.\n\nMara is exacting, curious, and wary of authority. She carries her mother's brass compass, which points to whatever she has lost most recently." },
-    { path: "Worldbuilding/Characters/Elias Thorne.md", content: "# Elias Thorne\n\n**Role:** Royal astronomer  \n**Home:** Asterfall Observatory  \n**Secret:** He remembers the thirteenth bell.\n\nA careful scholar whose loyalty to the Crown is tested by the impossible chart." },
-    { path: "Worldbuilding/Locations/Asterfall.md", content: "# Asterfall\n\nA canal city built around an observatory and a river that changes course in the old maps. Its bells regulate the city's public clocks." },
-    { path: "Worldbuilding/Locations/The Glass Coast.md", content: "# The Glass Coast\n\nA northern shoreline said to appear only on maps drawn in gold ink. Sailors who find it return with memories of another life." },
-    { path: "Worldbuilding/Factions/The Royal Archive.md", content: "# The Royal Archive\n\nThe Crown's institution for cartography and historical records. Archivists are sworn to preserve every approved map and destroy all unlicensed copies." },
-    { path: "Timelines/Story timeline.md", content: "# Story timeline\n\n- 0 | The thirteenth bell rings in Asterfall\n- 1 | Mara discovers the river's changed course\n- 2 | Elias finds Mara at the observatory" },
-    { path: "Todos/tasks.json", content: JSON.stringify({ items: [] }, null, 2) },
-    { path: "config.json", content: JSON.stringify({ name: "The Cartographer's Silence", dailyWordGoal: 500, version: 1, modules: { ideation: false, writing: true, editing: false, publishing: false } }, null, 2) }
+    { path: "Manuscript/01 - Creating chapters.md", content: "# Creating chapters\n\nThis is a tutorial chapter. Replace it with your own writing whenever you are ready.\n\n## Add another chapter\n\n1. In the Project binder, use the **＋** beside **Manuscript**, or choose **Add to project → New chapter**.\n2. Give the new entry a title and write in the editor. Veritas creates a Markdown file in the `Manuscript` folder.\n3. Repeat whenever your draft needs another chapter. Chapters are listed in the binder and can be renamed, reordered by their filenames, and edited independently.\n\nYour project files are plain Markdown, so you can also create a `.md` file in `Manuscript` with another editor and reopen the project.\n\nThe starter project also includes guides for Ideation, Editing, and Publishing. Open the project switcher and enable those modules on this project to explore them." },
+    { path: "Manuscript/02 - Chapter notes.md", content: "# Chapter notes\n\nChapter notes are planning space for the selected chapter. They are separate from the chapter text: notes are saved with the project, but do not appear in the manuscript or its exports.\n\nOpen the Inspector beside this editor and find **Chapter notes**. Select another chapter and the Inspector switches to that chapter's own notes. Use this area for reminders, questions, research, or revision ideas; keep prose you want readers to see in the manuscript editor instead." },
+    { path: "Worldbuilding/Characters/Creating character entries.md", content: "# Creating character entries\n\nEach character is its own entry in **Worldbuilding → Characters**. Use the **＋** beside Worldbuilding or **Add to project → New character** to create one. Fill in the structured fields above this text, then use the editor for details that do not fit those fields, such as appearance, goals, relationships, and character arcs.\n\nCreate as many entries as you need. The fields belong to each character, so different entries can have different values while sharing the same template. Use **Dictionary** in the binder to keep a glossary of invented words and their meanings." },
+    { path: "Worldbuilding/Characters/Custom character fields.md", content: "# Custom character fields\n\nCharacter templates define which structured fields appear on every character entry. To customize them, open **Settings → Templates & fields**, choose **Character**, and add a field.\n\nFor example, add **Race** as a dropdown and enter choices separated by commas. Add **Skin color** as text for a free-form value, or as a dropdown when you want a consistent set of choices. The new fields will be available on character entries across the project. You can use the same settings to change the templates for locations and factions." },
+    { path: "Worldbuilding/Locations/Creating locations.md", content: "# Creating locations\n\nCreate a location with the **＋** beside Worldbuilding or **Add to project → New location**. Give it a name, fill in its location fields, and use the editor for sensory details, history, inhabitants, and important scenes.\n\nCreate one entry per place you need to track. To add or change structured location fields, open **Settings → Templates & fields** and choose **Location**." },
+    { path: "Worldbuilding/Locations/Organizing locations.md", content: "# Organizing locations\n\nUse separate location entries for places at different scales: a region, city, building, or a single room can each have their own note. Mention an entry's name in your draft to make it easier to find related worldbuilding while you write.\n\nThis is another location tutorial entry. Rename or replace it as you start building your own setting." },
+    { path: "Worldbuilding/Factions/Creating factions.md", content: "# Creating factions\n\nCreate a faction with the **＋** beside Worldbuilding or **Add to project → New faction**. Record its name and role in the structured fields, then use the editor to describe its goals, membership, resources, conflicts, and history.\n\nUse **Settings → Templates & fields → Faction** to add fields that suit your project. A faction can represent an organization, family, guild, political movement, or any group that matters to your story." },
+    { path: "Timelines/Building a timeline.md", content: "# Building a timeline\n\nCreate a timeline with the **＋** beside Timelines or **Add to project → New timeline**. Add events from the timeline view, or write them in this Markdown format:\n\n- Date or sequence | Event description\n\nUse a consistent date or sequence system that fits your story. The timeline view reads entries written as `- date | event`; keep planning notes and explanations on other lines." },
+    { path: "Timelines/Using the plot planner.md", content: "# Using the plot planner\n\nThe plot planner organizes story events into threads and character arcs. Open **Plot planner** from the top navigation. Add threads for storylines, then add events and assign each one to the thread it affects. Use arcs to track a character's development across those events.\n\nSwitch between the **Surface** and **Shadow** layers to separate what is visible in the story from hidden context. The planner data is saved in `Timelines/Plot planner.json`; this guide is a separate Markdown note." },
+    { path: "Todos/tasks.json", content: JSON.stringify({ items: [{ id: "tutorial-task", text: "Tutorial: Add a task, mark it complete, or remove it to try the project to-do list.", done: false }] }, null, 2) },
+    { path: "Ideation/ideas.json", content: JSON.stringify({ logline: "Tutorial: Summarize the protagonist, their goal, and the main obstacle in one or two sentences.", premise: "Tutorial: Use this space to explore the central question, stakes, and promise of your story.", notes: "Tutorial: Capture loose questions and possibilities here. Use Brainstorm to arrange idea cards on a canvas, or Moodboard to collect image references.", cards: [], moodboard: [] }, null, 2) },
+    { path: "Editing/revisions.json", content: JSON.stringify({ snapshots: [], checklist: [{ text: "Tutorial: Save a version snapshot before making a substantial revision.", done: false }, { text: "Tutorial: Analyze a chapter to review proofreading and style suggestions.", done: false }, { text: "Tutorial: Add focused checklist passes, such as checking character motivations or continuity.", done: false }] }, null, 2) },
+    { path: "Publishing/launch.json", content: JSON.stringify({ plan: "Tutorial: Use this space to plan your audience, comparable titles, promotion channels, and launch approach.", bio: "Tutorial: Add a short author bio for retailer pages, press, and event organizers.", checklist: [{ text: "Tutorial: Add a book in Book details to track its metadata.", done: false }, { text: "Tutorial: Draft the pitch and blurb under Marketing copy.", done: false }, { text: "Tutorial: Record expenses and earnings under Finances.", done: false }] }, null, 2) },
+    { path: "config.json", content: JSON.stringify({ name: "Veritas Studio Tutorial", dailyWordGoal: 500, version: 1, modules: { ideation: false, writing: true, editing: false, publishing: false } }, null, 2) }
   ];
+  const starterNotes = {
+    "Manuscript/02 - Chapter notes.md": "These notes belong only to this chapter. They are stored separately from the manuscript text and are not included in exports. Select another chapter to see its own notes."
+  };
 
   function words(text) {
     const plain = text.replace(/[#>*_`~[\]()!-]/g, " ").trim();
@@ -328,13 +336,14 @@
       } else {
         const legacy = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
         const id = `project-${crypto.randomUUID()}`;
-        const name = legacy?.name || "The Cartographer's Silence";
+        const name = legacy?.name || "Veritas Studio Tutorial";
         state.projects = [{ id, name, storage: "browser", modules: { ideation: false, writing: true, editing: false, publishing: false } }];
         state.projectId = id;
         if (legacy?.files?.length) localStorage.setItem(`${PROJECT_DATA_PREFIX}${id}`, JSON.stringify(legacy));
         else localStorage.setItem(`${PROJECT_DATA_PREFIX}${id}`, JSON.stringify({
           name, files: starterFiles.map(file => ({ ...file })),
-          dailyGoal: DEFAULT_GOAL, dailyWords: 0, dayStartWords: 0, sessionStart: Date.now()
+          dailyGoal: DEFAULT_GOAL, dailyWords: 0, dayStartWords: 0, sessionStart: Date.now(),
+          manuscriptNotes: { ...starterNotes }
         }));
       }
       persistProjectCatalog();
@@ -342,7 +351,7 @@
     } catch (error) {
       console.error("Could not load project catalog.", error);
       state.files = new Map(starterFiles.map(file => [file.path, file.content]));
-      state.manuscriptNotes = {};
+      state.manuscriptNotes = { ...starterNotes };
       state.projectId = "recovery";
       state.projects = [{ id: state.projectId, name: "Recovery workspace", storage: "browser", modules: { writing: true } }];
       renderAll();
@@ -369,6 +378,9 @@
     if (projectConfig.modules) project.modules = { ideation: false, writing: true, editing: false, publishing: false, ...project.modules, ...projectConfig.modules };
     if (!project.modules?.[state.currentModule]) state.currentModule = MODULES.find(module => project.modules?.[module.id])?.id || "writing";
     state.dailyGoal = Number(saved?.dailyGoal) || Number(projectConfig.dailyWordGoal) || DEFAULT_GOAL;
+    state.projectWordGoal = Number.isInteger(projectConfig.projectWordGoal) && projectConfig.projectWordGoal > 0
+      ? projectConfig.projectWordGoal
+      : 0;
     state.dayStartWords = Number(saved?.dayStartWords) || 0;
     state.dailyWords = Number(saved?.dailyWords) || 0;
     state.sessionStart = Number(saved?.sessionStart) || Date.now();
@@ -425,9 +437,11 @@
     const modules = activeProject()?.modules || {};
     MODULES.filter(module => modules[module.id]).forEach(module => {
       const button = document.createElement("button");
-      button.className = `module-nav-item${state.currentModule === module.id && state.currentView === "editor" ? " active" : ""}`;
+      const moduleActive = state.currentModule === module.id
+        && (state.currentView === "editor" || (module.id === "writing" && state.currentView === "dictionary"));
+      button.className = `module-nav-item${moduleActive ? " active" : ""}`;
       button.type = "button";
-      button.setAttribute("aria-pressed", String(state.currentModule === module.id && state.currentView === "editor"));
+      button.setAttribute("aria-pressed", String(moduleActive));
       button.innerHTML = `<span>${module.icon}</span>${module.name}`;
       button.addEventListener("click", () => showModule(module.id));
       container.append(button);
@@ -1105,7 +1119,7 @@
         ${desktop
           ? `<div class="local-ai-model-controls"><label for="local-ai-model">GGUF MODEL</label><select id="local-ai-model"><option value="">Checking local models…</option></select><button class="button-secondary" type="button" data-import-local-model>Import model</button></div><div class="local-ai-model-location"><span data-local-ai-location>Models are stored in this app's local data folder.</span><button class="button-secondary" type="button" data-open-local-ai-folder>Open model folder</button></div>`
           : '<div class="empty-hint">Local model inference is available in the Veritas desktop app.</div>'}
-        <div class="local-ai-actions"><span data-local-ai-status role="status">Choose a local GGUF model to get started.</span><button class="button-primary" type="button" data-run-local-critique ${desktop && chapters.length ? "" : "disabled"}>Critique chapter</button></div>
+        <div class="local-ai-actions"><span data-local-ai-status role="status">Choose a local GGUF model to get started.</span><div class="local-ai-action-buttons"><button class="button-secondary" type="button" data-save-local-critique hidden disabled>Save critique</button><button class="button-primary" type="button" data-run-local-critique ${desktop && chapters.length ? "" : "disabled"}>Critique chapter</button></div></div>
         <pre class="local-ai-output" data-local-ai-output aria-live="polite">${state.localAiCritique?.text ? escapeHtml(state.localAiCritique.text) : "Your critique will appear here as it is generated."}</pre>
       </section>
       <section class="module-card proofreading-card">
@@ -1128,6 +1142,8 @@
       $("[data-proofread-status]", container).textContent = path ? "Ready when you are" : "Choose a manuscript chapter.";
       $("[data-proofread-results]", container).innerHTML = '<div class="empty-hint">Analyze the selected chapter to review proofreading and style suggestions.</div>';
       const button = $("[data-run-local-critique]", container);
+      const saveButton = $("[data-save-local-critique]", container);
+      if (saveButton) saveButton.hidden = true;
       if (button) button.disabled = !$("#local-ai-model", container)?.value || !path;
       const output = $("[data-local-ai-output]", container);
       if (output) output.textContent = "Your critique will appear here as it is generated.";
@@ -1204,6 +1220,11 @@
     const chapterSelect = $("#proofread-chapter", container);
     if (chapterSelect) chapterSelect.disabled = critique.status === "running";
     const button = $("[data-run-local-critique]", container);
+    const saveButton = $("[data-save-local-critique]", container);
+    if (saveButton) {
+      saveButton.hidden = critique.status !== "complete" || !critique.text.trim();
+      saveButton.disabled = Boolean(critique.saving);
+    }
     if (button) {
       button.disabled = critique.status === "running" || !$("#local-ai-model", container)?.value || !$("#proofread-chapter", container)?.value;
       button.textContent = critique.status === "running" ? "Analyzing…" : "Critique chapter";
@@ -1251,6 +1272,7 @@
     const openFolderButton = $("[data-open-local-ai-folder]", container);
     const modelSelect = $("#local-ai-model", container);
     const runButton = $("[data-run-local-critique]", container);
+    const saveButton = $("[data-save-local-critique]", container);
     const status = $("[data-local-ai-status]", container);
     const setError = error => {
       console.error("Local chapter critique failed.", error);
@@ -1265,6 +1287,26 @@
       } catch (error) {
         console.error("Could not open the local model folder.", error);
         notify(`Could not open the local model folder: ${error.message}`);
+      }
+    });
+    saveButton?.addEventListener("click", async () => {
+      const critique = state.localAiCritique;
+      if (!critique || critique.status !== "complete" || !critique.text || critique.saving) return;
+      critique.saving = true;
+      updateLocalAiCritiqueView(container, critique.requestId);
+      try {
+        const result = await desktop.saveLocalAiCritique({
+          chapterTitle: basename(critique.chapterPath).replace(/\.md$/i, ""),
+          critiquedAt: critique.critiquedAt,
+          critique: critique.text
+        });
+        if (!result.canceled) notify(`Critique saved to ${result.filePath}`);
+      } catch (error) {
+        console.error("Could not save local chapter critique.", error);
+        notify(`Could not save critique: ${error.message}`);
+      } finally {
+        critique.saving = false;
+        updateLocalAiCritiqueView(container, critique.requestId);
       }
     });
     modelSelect?.addEventListener("change", async () => {
@@ -1312,9 +1354,12 @@
       const critique = {
         requestId: crypto.randomUUID(),
         chapterPath: path,
+        chapterTitle: basename(path).replace(/\.md$/i, ""),
         text: "",
         status: "running",
-        message: "Preparing the local inference engine…"
+        message: "Preparing the local inference engine…",
+        critiquedAt: null,
+        saving: false
       };
       state.localAiCritique = critique;
       updateLocalAiCritiqueView(container, critique.requestId);
@@ -1324,6 +1369,7 @@
         else if (update.type === "status") critique.message = update.text;
         else if (update.type === "complete") {
           critique.status = "complete";
+          critique.critiquedAt = new Date().toISOString();
           critique.message = "Critique complete · generated locally on this device.";
         } else if (update.type === "error") {
           critique.status = "error";
@@ -1332,9 +1378,10 @@
         updateLocalAiCritiqueView(container, critique.requestId);
       });
       try {
-        await desktop.analyzeLocalChapter({ requestId: critique.requestId, chapterName: basename(path), text });
+        await desktop.analyzeLocalChapter({ requestId: critique.requestId, chapterName: critique.chapterTitle, text });
         if (critique.status === "running") {
           critique.status = "complete";
+          critique.critiquedAt = new Date().toISOString();
           critique.message = "Critique complete · generated locally on this device.";
         }
       } catch (error) {
@@ -1663,7 +1710,8 @@
   }
 
   function applyModuleVisibility() {
-    const focused = state.currentModule !== "writing" || state.currentView !== "editor";
+    const writingWorkspaceView = state.currentView === "editor" || state.currentView === "dictionary";
+    const focused = state.currentModule !== "writing" || !writingWorkspaceView;
     document.body.classList.toggle("module-focus", focused);
   }
 
@@ -1989,6 +2037,7 @@
     state.currentView = "editor";
     state.plotThread = "all";
     state.dailyGoal = DEFAULT_GOAL;
+    state.projectWordGoal = 0;
     state.dailyWords = 0;
     state.dayStartWords = 0;
     state.sessionStart = Date.now();
@@ -2048,6 +2097,9 @@
     if (projectConfig.modules) project.modules = { ideation: false, writing: true, editing: false, publishing: false, ...project.modules, ...projectConfig.modules };
     if (!project.modules?.[state.currentModule]) state.currentModule = MODULES.find(module => project.modules?.[module.id])?.id || "writing";
     state.dailyGoal = Number(snapshot.dailyGoal) || Number(projectConfig.dailyWordGoal) || DEFAULT_GOAL;
+    state.projectWordGoal = Number.isInteger(projectConfig.projectWordGoal) && projectConfig.projectWordGoal > 0
+      ? projectConfig.projectWordGoal
+      : 0;
     state.dailyWords = Number(snapshot.dailyWords) || 0;
     state.dayStartWords = Number(snapshot.dayStartWords) || 0;
     state.sessionStart = Number(snapshot.sessionStart) || Date.now();
@@ -2843,6 +2895,32 @@
     $("#goal-bar").style.width = `${pct}%`;
     $(".progress-ring").style.setProperty("--progress", `${pct}%`);
     $("#session-count").textContent = `Today ${today.toLocaleString()} words`;
+
+    const manuscriptWords = [...state.files].reduce((total, [path, content]) => {
+      if (!/^Manuscript\/.+\.md$/i.test(path)) return total;
+      return total + words(path === state.activePath ? text : content);
+    }, 0);
+    const projectTarget = state.projectWordGoal;
+    const projectProgress = $("#project-word-progress");
+    const projectBar = $("#project-word-bar");
+    const projectEstimate = $("#project-goal-estimate");
+    const projectGoalButton = $("#change-project-word-goal");
+    if (projectProgress && projectBar && projectEstimate) {
+      if (projectGoalButton) projectGoalButton.textContent = projectTarget ? "Edit goal" : "Set goal";
+      projectProgress.textContent = projectTarget
+        ? `${manuscriptWords.toLocaleString()} / ${projectTarget.toLocaleString()}`
+        : `${manuscriptWords.toLocaleString()} words`;
+      const projectPct = projectTarget ? Math.min(100, Math.round(manuscriptWords / projectTarget * 100)) : 0;
+      projectBar.style.width = `${projectPct}%`;
+      if (!projectTarget) {
+        projectEstimate.textContent = "Set a project goal to see your estimated time to completion.";
+      } else if (manuscriptWords >= projectTarget) {
+        projectEstimate.textContent = "Project word goal reached.";
+      } else {
+        const days = Math.ceil((projectTarget - manuscriptWords) / state.dailyGoal);
+        projectEstimate.textContent = `About ${days} ${days === 1 ? "day" : "days"} if you meet your daily goal every day.`;
+      }
+    }
   }
 
   function updateSorth() {
@@ -3706,6 +3784,7 @@
     });
     $("#change-goal").addEventListener("click", () => void changeGoal());
     $("#goal-settings").addEventListener("click", () => void changeGoal());
+    $("#change-project-word-goal").addEventListener("click", () => void changeProjectWordGoal());
     $("#settings-button").addEventListener("click", () => openSettingsDialog());
     $("#editor-zoom-out").addEventListener("click", () => setEditorZoom(state.preferences.editorZoom - 10));
     $("#editor-zoom-in").addEventListener("click", () => setEditorZoom(state.preferences.editorZoom + 10));
@@ -4106,6 +4185,33 @@
     persistBrowserState();
     updateStats();
     notify("Daily goal updated");
+  }
+
+  async function changeProjectWordGoal() {
+    const value = await promptDialog("Project word-count goal", "Total manuscript words (0 to clear)", String(state.projectWordGoal || ""));
+    if (value === null) return;
+    const goal = Number(value);
+    if (!Number.isInteger(goal) || goal < 0) {
+      notify("Enter a whole number greater than or equal to zero.");
+      return;
+    }
+    let config;
+    try { config = JSON.parse(state.files.get("config.json") || "{}"); }
+    catch (error) {
+      console.error("Could not update the project word-count goal.", error);
+      notify("Project settings could not be read; the word-count goal was not changed.");
+      return;
+    }
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      notify("Project settings are invalid; the word-count goal was not changed.");
+      return;
+    }
+    if (goal) config.projectWordGoal = goal;
+    else delete config.projectWordGoal;
+    await saveJsonFile("config.json", config);
+    state.projectWordGoal = goal;
+    updateStats();
+    notify(goal ? "Project word-count goal updated" : "Project word-count goal cleared");
   }
 
   async function init() {

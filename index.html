@@ -90,7 +90,7 @@
                   <span class="document-date" id="document-date"></span>
                 </div>
                 <div class="entity-fields" id="entity-fields" hidden></div>
-                <input class="title-input" id="document-title" aria-label="Document title" value="The Cartographer's Silence" spellcheck="true">
+                <input class="title-input" id="document-title" aria-label="Document title" value="Creating chapters" spellcheck="true">
                 <div class="format-toolbar" role="toolbar" aria-label="Writing tools">
                   <button type="button" data-editor-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
                   <button type="button" data-editor-command="redo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
@@ -155,6 +155,12 @@
                     <div class="progress-ring"><span id="goal-percent">0%</span></div>
                     <div class="progress-track"><span id="goal-bar"></span></div>
                     <div class="goal-foot"><span>Daily goal</span><button id="change-goal" class="inline-link">Edit goal</button></div>
+                  </div>
+                  <div class="project-goal-card">
+                    <div class="project-goal-heading"><strong>Project manuscript</strong><button id="change-project-word-goal" class="inline-link">Set goal</button></div>
+                    <strong class="project-word-progress" id="project-word-progress">0 words</strong>
+                    <div class="progress-track"><span id="project-word-bar"></span></div>
+                    <small id="project-goal-estimate">Set a project goal to see your estimated time to completion.</small>
                   </div>
                 </div>
               </section>

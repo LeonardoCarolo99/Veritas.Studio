@@ -79,6 +79,7 @@ body[data-theme="coffee"] .topbar,
 body[data-theme="coffee"] .menu-bar,
 body[data-theme="coffee"] .statusbar { background: #261c16; }
 body[data-theme="coffee"] .goal-card,
+body[data-theme="coffee"] .project-goal-card,
 body[data-theme="coffee"] .entity-fields { background: #35271e; }
 body[data-theme="coffee"] .settings-dialog,
 body[data-theme="coffee"] .export-card,
@@ -93,6 +94,7 @@ body[data-theme="scifi"] .topbar,
 body[data-theme="scifi"] .menu-bar,
 body[data-theme="scifi"] .statusbar { background: #0d1522; }
 body[data-theme="scifi"] .goal-card,
+body[data-theme="scifi"] .project-goal-card,
 body[data-theme="scifi"] .entity-fields { background: #172338; }
 body[data-theme="scifi"] .panel,
 body[data-theme="scifi"] .settings-dialog,
@@ -110,6 +112,7 @@ body[data-theme="light"] .topbar,
 body[data-theme="light"] .menu-bar,
 body[data-theme="light"] .statusbar { background: #dedbd3; }
 body[data-theme="light"] .goal-card,
+body[data-theme="light"] .project-goal-card,
 body[data-theme="light"] .entity-fields,
 body[data-theme="light"] .sorth-item { background: #ebe8e1; }
 body[data-theme="light"] .title-input,
@@ -334,6 +337,11 @@ body[data-editor-width="wide"] { --editor-max-width: 100%; }
 .section-title h3 { font-size: 11px; margin: 0; font-weight: 600; }
 .section-caption { color: #878d97; font-size: 10px; line-height: 1.5; margin: 7px 0 12px; }
 .goal-card { margin-top: 11px; border: 1px solid #383b41; border-radius: 6px; background: #24272c; padding: 12px; position: relative; }
+.project-goal-card { margin-top: 9px; border: 1px solid #383b41; border-radius: 6px; background: #24272c; padding: 12px; }
+.project-goal-heading { display: flex; justify-content: space-between; align-items: center; color: #858a94; font-size: 9px; }
+.project-word-progress { display: block; margin-top: 8px; color: #e4d6bd; font: 500 17px var(--serif); }
+.project-goal-card .progress-track { margin: 8px 0; }
+.project-goal-card>small { color: #858a94; font-size: 9px; line-height: 1.5; }
 .goal-copy { display: flex; flex-direction: column; gap: 3px; }
 .goal-copy strong { font: 500 22px var(--serif); color: #e4d6bd; }
 .goal-copy strong span { color: #81858d; font: 12px var(--sans); }
@@ -667,8 +675,9 @@ body[data-theme="light"] .context-menu kbd { color: #77766f; }
 .local-ai-model-location { display: flex; align-items: center; justify-content: space-between; gap: 10px; overflow-wrap: anywhere; color: var(--muted); font: 9px/1.5 var(--mono); }
 .local-ai-model-location span { min-width: 0; }
 .local-ai-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.local-ai-action-buttons { display: flex; flex: 0 0 auto; gap: 8px; }
 .local-ai-actions [role="status"] { min-width: 0; color: var(--soft); font: 10px/1.5 var(--sans); }
-.local-ai-actions [data-run-local-critique]:disabled,.local-ai-model-controls button:disabled { cursor: not-allowed; opacity: .5; }
+.local-ai-actions [data-run-local-critique]:disabled,.local-ai-actions [data-save-local-critique]:disabled,.local-ai-model-controls button:disabled { cursor: not-allowed; opacity: .5; }
 .local-ai-output { min-height: 110px; max-height: 560px; overflow: auto; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--soft); font: 12px/1.75 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
 .prose-metrics-card { display: grid; gap: 19px; margin-bottom: 18px; }
 .prose-metric-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -851,6 +860,7 @@ body[data-theme="light"] .publishing-form-grid select,body[data-theme="light"] .
   .local-ai-model-controls button { flex: 1 1 100%; order: 3; }
   .local-ai-model-location { align-items: flex-start; flex-direction: column; }
   .local-ai-actions { align-items: flex-start; flex-direction: column; }
+  .local-ai-action-buttons { width: 100%; flex-wrap: wrap; }
   .export-workspace { grid-template-columns: 160px minmax(0,1fr); }
   .export-content .scope-option small,.export-content .format-option small { display: none; }
   .topbar { gap: 10px; padding: 0 12px; }

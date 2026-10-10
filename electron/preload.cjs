@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("veritasDesktop", Object.freeze({
   installUpdate: () => ipcRenderer.invoke("veritas:install-update"),
   getLocalAiState: () => ipcRenderer.invoke("veritas:local-ai:get-state"),
   openLocalAiFolder: () => ipcRenderer.invoke("veritas:local-ai:open-folder"),
+  saveLocalAiCritique: critique => ipcRenderer.invoke("veritas:local-ai:save-critique", critique),
   importLocalAiModel: () => ipcRenderer.invoke("veritas:local-ai:import-model"),
   selectLocalAiModel: filename => ipcRenderer.invoke("veritas:local-ai:select-model", filename),
   analyzeLocalChapter: request => ipcRenderer.invoke("veritas:local-ai:analyze", request),
