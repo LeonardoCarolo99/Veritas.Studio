@@ -51,7 +51,10 @@
             <button class="binder-add-button" id="new-menu" type="button" title="Add a new element to this project"><span class="add-glyph" aria-hidden="true"></span> Add to project</button>
             <div class="binder-scroll">
               <div class="tree-heading"><button class="tree-disclosure" type="button" data-binder-toggle="chapters" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>MANUSCRIPT</span></button><button class="text-button" id="new-chapter" type="button" title="New chapter" aria-label="New chapter"><span class="add-glyph" aria-hidden="true"></span></button></div>
-              <div id="chapter-list" class="tree-list" data-binder-content="chapters"></div>
+              <div data-binder-content="chapters">
+                <button class="manuscript-index-entry" id="manuscript-index-open" type="button" aria-pressed="false"><span class="manuscript-index-icon" aria-hidden="true">☷</span><span>Index</span><span class="manuscript-index-tag">AUTO</span></button>
+                <div id="chapter-list" class="tree-list"></div>
+              </div>
               <div class="tree-heading worldbuilding-heading"><button class="tree-disclosure" type="button" data-binder-toggle="worldbuilding" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>WORLDBUILDING</span></button><button class="text-button" id="new-lore" type="button" title="New worldbuilding entry" aria-label="New worldbuilding entry"><span class="add-glyph" aria-hidden="true"></span></button></div>
               <div data-binder-content="worldbuilding">
                 <div class="tree-subheading"><button class="tree-disclosure" type="button" data-binder-toggle="characters" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>CHARACTERS</span></button></div><div id="character-list" class="tree-list" data-binder-content="characters"></div>
@@ -76,6 +79,7 @@
                   <button class="editor-zoom-value" id="editor-zoom-reset" type="button" title="Reset manuscript zoom" aria-label="Reset manuscript zoom">100%</button>
                   <button class="icon-button small" id="editor-zoom-in" type="button" title="Zoom manuscript in" aria-label="Zoom manuscript in">+</button>
                 </div>
+                <button class="icon-button small focus-mode-toggle" id="focus-mode-toggle" type="button" title="Enter focus mode" aria-label="Enter focus mode" aria-pressed="false">⛶</button>
                 <button class="icon-button small" id="split-horizontal" title="Split editor horizontally">⊞</button>
                 <button class="icon-button small" id="split-vertical" title="Split editor vertically">▤</button>
                 <button class="icon-button small" data-collapse="right" title="Toggle inspector" aria-label="Toggle inspector">›</button>
@@ -120,6 +124,13 @@
                   <span id="word-count">0 words</span><span class="editor-dot">·</span><span id="reading-time">1 min read</span>
                   <span class="editor-bottom-spacer"></span>
                   <span id="session-count">Today 0 words</span>
+                  <span class="editor-dot">·</span>
+                  <div class="session-timer" id="session-timer" role="group" aria-label="Session timer">
+                    <span class="session-timer-label">Session</span>
+                    <button class="session-timer-control" id="session-timer-toggle" type="button" aria-label="Start session timer" aria-pressed="false" title="Start session timer"><span id="session-timer-icon" aria-hidden="true">▶</span></button>
+                    <time class="session-timer-display" id="session-timer-display" datetime="PT0S" aria-label="Elapsed writing time">00:00:00</time>
+                    <button class="session-timer-control session-timer-reset" id="session-timer-reset" type="button" aria-label="Reset session timer" title="Reset session timer">↺</button>
+                  </div>
                   <span class="editor-dot">·</span><span>Local-first</span>
                 </div>
               </div>
@@ -205,7 +216,6 @@
 
       <footer class="statusbar">
         <div><span class="status-led"></span><span id="status-text">Ready to write</span></div>
-        <div class="status-right"><span id="vault-mode">Browser vault</span><span class="status-separator">·</span><span>UTF-8</span><span class="status-separator">·</span><span>Markdown</span></div>
       </footer>
       <div class="drop-overlay" id="drop-overlay" hidden>Drop panel to dock</div>
       <div class="toast" id="toast" role="status"></div>

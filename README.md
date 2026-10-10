@@ -44,8 +44,11 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 
 - Rich editing for headings, emphasis, quotations, and lists
 - Manuscript files remain portable Markdown
+- Manuscript chapters display as paper-like pages in the editor; page breaks there are an editing aid, while Word determines final DOCX pagination
+- An automatically assembled manuscript index lists chapters in filename order, without their numeric ordering prefixes
 - Chapter-specific notes in the Inspector, saved with each project
 - Daily word goals, project manuscript targets with completion estimates, live word count, and reading-time estimates
+- A per-project session timer with start, pause, and reset controls that remembers elapsed time
 - Find and replace, undo and redo, and split-editor views
 - Themes, editor sizing, and a focused, adjustable workspace
 
@@ -79,6 +82,7 @@ Turn on only the parts of the process you need:
 - Export a document, a chapter, or the full manuscript
 - Choose Markdown, DOCX, or print-to-PDF
 - Configure title pages and chapter page breaks
+- DOCX exports include Word-managed page numbers; full-manuscript exports can include an updateable table of contents with real page numbers. Word calculates pagination when the document opens; browser print-to-PDF pagination may differ.
 - Export and import a complete project archive
 - Keep a simple project-scoped to-do list close at hand
 

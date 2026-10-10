@@ -19,6 +19,9 @@
   ];
   const PREFERENCES_KEY = "veritas-studio-preferences";
   const DEFAULT_GOAL = 500;
+  const UI_SCALE_MIN = 1.3;
+  const UI_SCALE_MAX = 2;
+  const UI_SCALE_STEP = 0.1;
   const DEFAULT_SCHEMAS = {
     character: [
       { name: "Name", type: "text" },
@@ -50,6 +53,9 @@
     saveTimer: null,
     scanTimer: null,
     toastTimer: null,
+    sessionTimerInterval: null,
+    sessionTimerElapsed: 0,
+    sessionTimerStartedAt: null,
     updateState: { status: "idle", version: "" },
     updateScreenDismissed: false,
     dayStartWords: 0,
@@ -78,7 +84,7 @@
       editorFontSize: "14",
       editorWidth: "comfortable",
       editorZoom: 100,
-      uiScale: 1,
+      uiScale: UI_SCALE_MIN,
       dailyGoal: DEFAULT_GOAL
     },
     collapsedBinderGroups: {},
@@ -140,8 +146,100 @@
     }
   }
 
+  function sessionTimerStorageKey() {
+    return `${STORAGE_KEY}-timer:${state.projectId || "legacy"}`;
+  }
+
+  function persistSessionTimer() {
+    try {
+      localStorage.setItem(sessionTimerStorageKey(), JSON.stringify({
+        elapsed: state.sessionTimerElapsed,
+        startedAt: state.sessionTimerStartedAt
+      }));
+    } catch (error) {
+      console.error("Could not save the session timer.", error);
+      notify(`Could not save session timer: ${error.message}`);
+    }
+  }
+
+  function renderSessionTimer() {
+    const running = state.sessionTimerStartedAt !== null;
+    const elapsed = state.sessionTimerElapsed + (running ? Math.max(0, Date.now() - state.sessionTimerStartedAt) : 0);
+    const totalSeconds = Math.floor(elapsed / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor(totalSeconds % 3600 / 60);
+    const seconds = totalSeconds % 60;
+    const display = [hours, minutes, seconds].map(value => String(value).padStart(2, "0")).join(":");
+    const timer = $("#session-timer");
+    const toggle = $("#session-timer-toggle");
+    $("#session-timer-display").textContent = display;
+    $("#session-timer-display").dateTime = `PT${totalSeconds}S`;
+    $("#session-timer-display").setAttribute("aria-label", `Elapsed writing time: ${hours} hours, ${minutes} minutes, ${seconds} seconds`);
+    toggle.setAttribute("aria-label", `${running ? "Pause" : "Start"} session timer`);
+    toggle.setAttribute("title", `${running ? "Pause" : "Start"} session timer`);
+    toggle.setAttribute("aria-pressed", String(running));
+    $("#session-timer-icon").textContent = running ? "Ⅱ" : "▶";
+    timer.classList.toggle("is-running", running);
+  }
+
+  function restoreSessionTimer() {
+    clearInterval(state.sessionTimerInterval);
+    state.sessionTimerInterval = null;
+    state.sessionTimerElapsed = 0;
+    state.sessionTimerStartedAt = null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(sessionTimerStorageKey()) || "null");
+      if (saved && Number.isFinite(saved.elapsed) && saved.elapsed >= 0) {
+        state.sessionTimerElapsed = saved.elapsed;
+        if (saved.startedAt === null || Number.isFinite(saved.startedAt) && saved.startedAt > 0) {
+          state.sessionTimerStartedAt = saved.startedAt;
+        }
+      }
+    } catch (error) {
+      console.error("Could not restore the session timer.", error);
+      notify(`Could not restore session timer: ${error.message}`);
+    }
+    if (state.sessionTimerStartedAt !== null) {
+      state.sessionTimerInterval = setInterval(renderSessionTimer, 1000);
+    }
+    renderSessionTimer();
+  }
+
+  function toggleSessionTimer() {
+    if (state.sessionTimerStartedAt === null) {
+      state.sessionTimerStartedAt = Date.now();
+      state.sessionTimerInterval = setInterval(renderSessionTimer, 1000);
+    } else {
+      state.sessionTimerElapsed += Math.max(0, Date.now() - state.sessionTimerStartedAt);
+      state.sessionTimerStartedAt = null;
+      clearInterval(state.sessionTimerInterval);
+      state.sessionTimerInterval = null;
+    }
+    persistSessionTimer();
+    renderSessionTimer();
+  }
+
+  function resetSessionTimer() {
+    clearInterval(state.sessionTimerInterval);
+    state.sessionTimerInterval = null;
+    state.sessionTimerElapsed = 0;
+    state.sessionTimerStartedAt = null;
+    persistSessionTimer();
+    renderSessionTimer();
+  }
+
   function basename(path) {
     return path.split("/").pop().replace(/\.(md|json)$/i, "");
+  }
+
+  function manuscriptChapters() {
+    return [...state.files.keys()]
+      .filter(path => path.startsWith("Manuscript/") && path.endsWith(".md"))
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  function chapterDisplayName(path) {
+    return basename(path).replace(/^\d+\s*-\s*/, "");
   }
 
   function category(path) {
@@ -363,6 +461,7 @@
     const project = state.projects.find(item => item.id === projectId);
     if (!project) throw new Error("The selected project is no longer available.");
     state.projectId = project.id;
+    restoreSessionTimer();
     state.dirHandle = null;
     state.files.clear();
     state.tabs = [];
@@ -427,7 +526,6 @@
   function updateProjectLabels() {
     const name = activeProject()?.name || "Untitled Project";
     $("#project-name").textContent = name;
-    $("#vault-mode").textContent = state.dirHandle ? (desktop ? "Windows folder" : "Local folder") : "Browser workspace";
   }
 
   function renderModuleNavigation() {
@@ -438,7 +536,7 @@
     MODULES.filter(module => modules[module.id]).forEach(module => {
       const button = document.createElement("button");
       const moduleActive = state.currentModule === module.id
-        && (state.currentView === "editor" || (module.id === "writing" && state.currentView === "dictionary"));
+        && (state.currentView === "editor" || (module.id === "writing" && ["dictionary", "manuscript-index"].includes(state.currentView)));
       button.className = `module-nav-item${moduleActive ? " active" : ""}`;
       button.type = "button";
       button.setAttribute("aria-pressed", String(moduleActive));
@@ -477,6 +575,7 @@
     state.currentView = "editor";
     renderModuleNavigation();
     const lifecycle = $("#lifecycle-view");
+    lifecycle.classList.remove("manuscript-index-view");
     const writing = moduleId === "writing";
     lifecycle.hidden = writing;
     $("[data-panel=editor]").hidden = !writing;
@@ -489,18 +588,22 @@
     state.currentModule = "writing";
     state.currentView = "planner";
     renderModuleNavigation();
-    $("#lifecycle-view").hidden = false;
+    const lifecycle = $("#lifecycle-view");
+    lifecycle.classList.remove("manuscript-index-view");
+    lifecycle.hidden = false;
     $("[data-panel=editor]").hidden = true;
-    renderPlotPlanner($("#lifecycle-view"));
+    renderPlotPlanner(lifecycle);
     applyModuleVisibility();
   }
 
   function openTodoView() {
     state.currentView = "todo";
     renderModuleNavigation();
-    $("#lifecycle-view").hidden = false;
+    const lifecycle = $("#lifecycle-view");
+    lifecycle.classList.remove("manuscript-index-view");
+    lifecycle.hidden = false;
     $("[data-panel=editor]").hidden = true;
-    renderTodoList($("#lifecycle-view"));
+    renderTodoList(lifecycle);
     applyModuleVisibility();
   }
 
@@ -513,10 +616,49 @@
     state.currentView = "dictionary";
     renderModuleNavigation();
     renderBinder();
-    $("#lifecycle-view").hidden = false;
+    const lifecycle = $("#lifecycle-view");
+    lifecycle.classList.remove("manuscript-index-view");
+    lifecycle.hidden = false;
     $("[data-panel=editor]").hidden = true;
-    renderDictionaryView($("#lifecycle-view"));
+    renderDictionaryView(lifecycle);
     applyModuleVisibility();
+  }
+
+  async function openManuscriptIndex() {
+    if (!activeProject()?.modules?.writing) return;
+    if (state.dirty) {
+      clearTimeout(state.saveTimer);
+      await saveActiveFile();
+      if (state.dirty) return;
+    }
+    state.currentModule = "writing";
+    state.currentView = "manuscript-index";
+    renderModuleNavigation();
+    renderBinder();
+    const lifecycle = $("#lifecycle-view");
+    lifecycle.classList.add("manuscript-index-view");
+    lifecycle.hidden = false;
+    $("[data-panel=editor]").hidden = true;
+    renderManuscriptIndex(lifecycle);
+    applyModuleVisibility();
+  }
+
+  function renderManuscriptIndex(container) {
+    const chapters = manuscriptChapters();
+    container.innerHTML = `<header class="lifecycle-header"><div><span class="eyebrow">MANUSCRIPT</span><h1>Index</h1><p>Automatically compiled from your chapter names.</p></div></header><div class="lifecycle-content manuscript-index-content"><section class="manuscript-index-card"><div class="manuscript-index-card-heading"><span class="eyebrow">CHAPTERS</span><span class="manuscript-index-count">${chapters.length}</span></div><div class="manuscript-index-list"></div></section></div>`;
+    const list = $(".manuscript-index-list", container);
+    if (!chapters.length) {
+      list.innerHTML = '<p class="empty-hint">Your chapter index will appear here when you add chapters to the Manuscript section.</p>';
+      return;
+    }
+    chapters.forEach(path => {
+      const entry = document.createElement("button");
+      entry.className = "manuscript-index-row";
+      entry.type = "button";
+      entry.innerHTML = `<span class="manuscript-index-row-icon" aria-hidden="true">▤</span><span class="manuscript-index-row-title">${escapeHtml(chapterDisplayName(path) || basename(path))}</span><span class="manuscript-index-arrow" aria-hidden="true">›</span>`;
+      entry.addEventListener("click", () => openFile(path));
+      list.append(entry);
+    });
   }
 
   function renderDictionaryView(container) {
@@ -1710,7 +1852,7 @@
   }
 
   function applyModuleVisibility() {
-    const writingWorkspaceView = state.currentView === "editor" || state.currentView === "dictionary";
+    const writingWorkspaceView = ["editor", "dictionary", "manuscript-index"].includes(state.currentView);
     const focused = state.currentModule !== "writing" || !writingWorkspaceView;
     document.body.classList.toggle("module-focus", focused);
   }
@@ -2014,6 +2156,7 @@
     }
     state.projects.push(project);
     state.projectId = project.id;
+    restoreSessionTimer();
     state.dirHandle = null;
     state.manuscriptNotes = {};
     state.files = new Map([
@@ -2055,6 +2198,7 @@
     const project = state.projects.find(item => item.id === projectId);
     if (!project) return;
     state.projectId = projectId;
+    restoreSessionTimer();
     state.dirHandle = null;
     state.files.clear();
     state.manuscriptNotes = {};
@@ -2108,6 +2252,7 @@
       state.dayStartWords = 0;
       state.dailyWords = 0;
     }
+    restoreSessionTimer();
     restoreMetrics();
     updateProjectLabels();
     persistProjectCatalog();
@@ -2158,6 +2303,9 @@
     });
     $("#dictionary-open").classList.toggle("active", state.currentView === "dictionary");
     $("#dictionary-open").setAttribute("aria-pressed", String(state.currentView === "dictionary"));
+    const indexButton = $("#manuscript-index-open");
+    indexButton.classList.toggle("active", state.currentView === "manuscript-index");
+    indexButton.setAttribute("aria-pressed", String(state.currentView === "manuscript-index"));
     const sets = {
       chapter: $("#chapter-list"),
       character: $("#character-list"),
@@ -2176,7 +2324,8 @@
       item.dataset.path = path;
       const icon = type === "chapter" ? "▤" : type === "timeline" ? "⌁" : "◇";
       const meta = type === "chapter" ? `${words(state.files.get(path))}` : "";
-      item.innerHTML = `<span class="tree-icon">${icon}</span><span class="tree-label">${escapeHtml(basename(path))}</span>${meta ? `<span class="tree-meta">${meta}</span>` : ""}${type === "chapter" ? '<button class="tree-export" type="button" title="Export this chapter" aria-label="Export this chapter">⇩</button>' : ""}`;
+      const label = isEntityPath(path) ? entityData(path).Name || basename(path) : basename(path);
+      item.innerHTML = `<span class="tree-icon">${icon}</span><span class="tree-label">${escapeHtml(label)}</span>${meta ? `<span class="tree-meta">${meta}</span>` : ""}${type === "chapter" ? '<button class="tree-export" type="button" title="Export this chapter" aria-label="Export this chapter">⇩</button>' : ""}`;
       item.addEventListener("click", event => {
         if (event.target.closest(".tree-export")) {
           event.stopPropagation();
@@ -2194,6 +2343,9 @@
     Object.entries(sets).forEach(([type, container]) => {
       if (!container.children.length) container.innerHTML = `<div class="empty-hint">No ${type === "chapter" ? "chapters" : `${type}s`} yet.</div>`;
     });
+    if (state.currentView === "manuscript-index" && !$("#lifecycle-view").hidden) {
+      renderManuscriptIndex($("#lifecycle-view"));
+    }
   }
 
   function showBinderContextMenu(path, x, y) {
@@ -2496,6 +2648,7 @@
     if (name === "Name" && state.activePath === path) {
       $("#document-title").value = value;
       updateSorth();
+      renderBinder();
     }
     markDirty();
   }
@@ -2535,6 +2688,7 @@
     $("#document-content").value = state.files.get(path);
     $("#rich-document-content").hidden = isJson;
     $("#document-content").hidden = !isJson;
+    $("#rich-document-content").classList.toggle("manuscript-pages", !isJson && category(path) === "chapter");
     if (!isJson) renderMarkdownEditor($("#document-content").value);
     renderChapterNotes();
     state.lastWordCount = words(editorBodyText());
@@ -2628,8 +2782,7 @@
       .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/gi, '<a href="$2">$1</a>');
   }
 
-  function renderMarkdownEditor(markdown) {
-    const editor = $("#rich-document-content");
+  function markdownEditorHtml(markdown) {
     const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
     if (/^#\s+/.test(lines[0] || "")) {
       lines.shift();
@@ -2669,8 +2822,82 @@
       if (!paragraph.length) paragraph.push(lines[index++]);
       blocks.push(`<p>${paragraph.map(inlineMarkdownHtml).join("<br>")}</p>`);
     }
-    editor.innerHTML = blocks.join("");
+    return blocks.join("");
+  }
+
+  function renderMarkdownEditor(markdown) {
+    const editor = $("#rich-document-content");
+    editor.innerHTML = markdownEditorHtml(markdown);
     state.editorSelection = null;
+    if (editor.classList.contains("manuscript-pages")) requestAnimationFrame(() => paginateManuscriptEditor(editor));
+  }
+
+  function paginateManuscriptEditor(editor = $("#rich-document-content")) {
+    if (!editor.classList.contains("manuscript-pages")) return;
+
+    const selection = window.getSelection();
+    const savedSelection = selection?.rangeCount && editor.contains(selection.anchorNode)
+      ? {
+          anchorNode: selection.anchorNode,
+          anchorOffset: selection.anchorOffset,
+          focusNode: selection.focusNode,
+          focusOffset: selection.focusOffset
+        }
+      : null;
+    const existingPages = [...editor.children].filter(child => child.classList.contains("manuscript-page"));
+    const blocks = existingPages.length
+      ? existingPages.flatMap(page => [...page.querySelector(".manuscript-page-content").childNodes])
+      : [...editor.childNodes];
+    if (!blocks.length) blocks.push(document.createElement("p"));
+
+    const pageWidth = Math.min(editor.clientWidth, 816);
+    if (!pageWidth) return;
+    const pageHeight = Math.round(pageWidth * 11 / 8.5);
+    editor.style.setProperty("--manuscript-page-height", `${pageHeight}px`);
+    let pageContent;
+    const newPages = [];
+    const newPage = () => {
+      const page = document.createElement("div");
+      page.className = "manuscript-page";
+      page.setAttribute("role", "group");
+      page.setAttribute("aria-label", `Manuscript page ${newPages.length + 1}`);
+      const content = document.createElement("div");
+      content.className = "manuscript-page-content";
+      content.setAttribute("contenteditable", "true");
+      page.append(content);
+      editor.append(page);
+      newPages.push(page);
+      pageContent = content;
+      return content;
+    };
+
+    newPage();
+    blocks.forEach(block => {
+      pageContent.append(block);
+      if (pageContent.childNodes.length > 1 && pageContent.scrollHeight > pageContent.clientHeight + 1) {
+        pageContent.removeChild(block);
+        newPage().append(block);
+      }
+    });
+    newPages.forEach(page => {
+      const content = page.querySelector(".manuscript-page-content");
+      const overflow = content.scrollHeight - content.clientHeight;
+      if (overflow > 1) {
+        const height = pageHeight + overflow;
+        page.style.height = `${height}px`;
+        page.style.flexBasis = `${height}px`;
+      }
+    });
+    existingPages.forEach(page => page.remove());
+
+    if (savedSelection && editor.contains(savedSelection.anchorNode) && editor.contains(savedSelection.focusNode)) {
+      selection.setBaseAndExtent(
+        savedSelection.anchorNode,
+        savedSelection.anchorOffset,
+        savedSelection.focusNode,
+        savedSelection.focusOffset
+      );
+    }
   }
 
   function editorInlineMarkdown(node) {
@@ -2727,7 +2954,12 @@
   }
 
   function richEditorMarkdown() {
-    return [...$("#rich-document-content").childNodes].map(editorBlockMarkdown).filter(Boolean).join("\n\n");
+    const editor = $("#rich-document-content");
+    const pages = [...editor.children].filter(child => child.classList.contains("manuscript-page"));
+    const blocks = pages.length
+      ? pages.flatMap(page => [...page.querySelector(".manuscript-page-content").childNodes])
+      : [...editor.childNodes];
+    return blocks.map(editorBlockMarkdown).filter(Boolean).join("\n\n");
   }
 
   function restoreEditorSelection() {
@@ -3064,6 +3296,7 @@
       if (desktop) project.folderPath = handle.path;
       if (!existing) state.projects.push(project);
       state.projectId = project.id;
+      restoreSessionTimer();
       const savedProject = JSON.parse(localStorage.getItem(`${PROJECT_DATA_PREFIX}${project.id}`) || "null");
       state.manuscriptNotes = savedProject?.manuscriptNotes && typeof savedProject.manuscriptNotes === "object" && !Array.isArray(savedProject.manuscriptNotes)
         ? { ...savedProject.manuscriptNotes }
@@ -3213,7 +3446,6 @@
         if (complete === pending.length) {
           const folderName = pending[0].webkitRelativePath?.split("/")[0] || "Local Vault";
           $("#project-name").textContent = folderName;
-          $("#vault-mode").textContent = "Imported browser vault";
           state.dirHandle = null;
           state.importedFolder = true;
           renderAll();
@@ -3357,19 +3589,33 @@
       <div class="export-options">
         <label><input type="checkbox" id="export-title-page"><span>Include title page</span></label>
         <label><input type="checkbox" id="export-chapter-breaks" checked><span>Start chapters on a new page</span></label>
+        <label id="export-toc-option"${initialScope === "manuscript" ? "" : " hidden"}><input type="checkbox" id="export-table-of-contents"${initialScope === "manuscript" ? " checked" : ""}><span>Include Word table of contents</span></label>
       </div>
       </div></div>
       <div class="dialog-actions"><button type="button" data-close-export>Cancel</button><button type="button" class="primary" id="confirm-export">Export document</button></div>
     </section>`;
     document.body.append(backdrop);
     const chapterWrap = $("#export-chapter-wrap", backdrop);
+    const tocOption = $("#export-toc-option", backdrop);
+    const tocCheckbox = $("#export-table-of-contents", backdrop);
+    const updateTocOption = () => {
+      const available = $('input[name="export-scope"]:checked', backdrop).value === "manuscript"
+        && $('input[name="export-format"]:checked', backdrop).value === "docx";
+      if (available && tocCheckbox.disabled) tocCheckbox.checked = true;
+      if (!available) tocCheckbox.checked = false;
+      tocCheckbox.disabled = !available;
+      tocOption.hidden = !available;
+    };
     $$('input[name="export-scope"]', backdrop).forEach(radio => radio.addEventListener("change", () => {
       chapterWrap.hidden = radio.value !== "chapter" || !radio.checked;
       if (radio.checked) $("#export-summary-title", backdrop).textContent = radio.value === "manuscript" ? "Full manuscript" : radio.value === "chapter" ? "Selected chapter" : "Current document";
+      updateTocOption();
     }));
     $$('input[name="export-format"]', backdrop).forEach(radio => radio.addEventListener("change", () => {
       if (radio.checked) $("#export-summary-detail", backdrop).textContent = `${radio.value.toUpperCase()} · ${radio.value === "docx" ? "editable document" : radio.value === "pdf" ? "print-ready" : "plain text"}`;
+      updateTocOption();
     }));
+    updateTocOption();
     $$("[data-close-export]", backdrop).forEach(button => button.addEventListener("click", () => backdrop.remove()));
     backdrop.addEventListener("click", event => { if (event.target === backdrop) backdrop.remove(); });
     $("#confirm-export", backdrop).addEventListener("click", () => {
@@ -3378,14 +3624,15 @@
       const selectedPath = selectedScope === "chapter" ? $("#export-chapter", backdrop).value : path;
       const titlePage = $("#export-title-page", backdrop).checked;
       const chapterBreaks = $("#export-chapter-breaks", backdrop).checked;
+      const includeToc = selectedScope === "manuscript" && format === "docx" && tocCheckbox.checked;
       backdrop.remove();
-      if (selectedScope === "manuscript") exportManuscript(format, { titlePage, chapterBreaks });
+      if (selectedScope === "manuscript") exportManuscript(format, { titlePage, chapterBreaks, includeToc });
       else exportDocument(selectedPath, format, { titlePage, chapterBreaks });
     });
   }
 
   function manuscriptContent() {
-    return [...state.files.keys()].filter(path => path.startsWith("Manuscript/") && path.endsWith(".md")).sort((a, b) => a.localeCompare(b))
+    return manuscriptChapters()
       .map(path => state.files.get(path).trim())
       .filter(Boolean).join("\n\n---\n\n");
   }
@@ -3407,7 +3654,14 @@
     let body = source;
     if (options.chapterBreaks && source.includes("\n\n---\n\n")) body = source.replace(/\n\n---\n\n/g, "\n\n[[PAGE_BREAK]]\n\n");
     if (options.titlePage) body = `# ${title}\n\n[[TITLE_PAGE_END]]\n\n${body}`;
-    if (format === "docx") exportDocx(title, body);
+    if (format === "docx") {
+      if (options.includeToc) {
+        body = options.titlePage
+          ? body.replace("[[TITLE_PAGE_END]]\n\n", "[[TITLE_PAGE_END]]\n\n[[TOC]]\n\n")
+          : `[[TOC]]\n\n${body}`;
+      }
+      exportDocx(title, body, { includeToc: Boolean(options.includeToc) });
+    }
     else if (format === "pdf") exportPdf(title, body, options);
     else if (format === "md") downloadText(`${title}.md`, body.replace(/\n\n\[\[(?:PAGE_BREAK|TITLE_PAGE_END)\]\]\n\n/g, "\n\n---\n\n"), "text/markdown");
   }
@@ -3548,13 +3802,22 @@
     return new Blob([...locals, ...central, end], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
   }
 
-  function exportDocx(title = $("#document-title").value || "Document", source = currentText()) {
+  function exportDocx(title = $("#document-title").value || "Document", source = currentText(), options = {}) {
+    let beforeTitlePageEnd = source.includes("[[TITLE_PAGE_END]]");
     const body = source.split(/\r?\n/).map(line => {
-      if (line === "[[PAGE_BREAK]]" || line === "[[TITLE_PAGE_END]]") return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+      if (line === "[[TITLE_PAGE_END]]") {
+        beforeTitlePageEnd = false;
+        return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+      }
+      if (line === "[[PAGE_BREAK]]") return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+      if (line === "[[TOC]]") {
+        const instruction = xmlEscape('TOC \\o "1-1" \\h \\z \\u');
+        return `<w:p><w:pPr><w:pStyle w:val="TOCTitle"/></w:pPr><w:r><w:t>Contents</w:t></w:r></w:p><w:p><w:fldSimple w:instr="${instruction}" w:dirty="true"><w:r><w:t>Open in Word and update the table to fill in page numbers.</w:t></w:r></w:fldSimple></w:p><w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+      }
       let style = "";
-      if (/^# /.test(line)) { style = '<w:pPr><w:pStyle w:val="Title"/></w:pPr>'; line = line.slice(2); }
-      else if (/^## /.test(line)) { style = '<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'; line = line.slice(3); }
-      else if (/^### /.test(line)) { style = '<w:pPr><w:pStyle w:val="Heading2"/></w:pPr>'; line = line.slice(4); }
+      if (/^# /.test(line)) { style = `<w:pPr><w:pStyle w:val="${options.includeToc && !beforeTitlePageEnd ? "Heading1" : "Title"}"/></w:pPr>`; line = line.slice(2); }
+      else if (/^## /.test(line)) { style = '<w:pPr><w:pStyle w:val="Heading2"/></w:pPr>'; line = line.slice(3); }
+      else if (/^### /.test(line)) { style = '<w:pPr><w:pStyle w:val="Heading3"/></w:pPr>'; line = line.slice(4); }
       else line = line.replace(/^>\s?/, "").replace(/^[-*]\s+/, "• ").replace(/^\d+[.)]\s+/, "• ");
       const runs = line.split(/(\*\*.*?\*\*|\*.*?\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean).map(part => {
         const bold = /^\*\*.*\*\*$/.test(part);
@@ -3565,13 +3828,16 @@
       }).join("");
       return `<w:p>${style}${runs || "<w:r><w:t></w:t></w:r>"}</w:p>`;
     }).join("");
-    const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
+    const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}<w:sectPr><w:footerReference w:type="default" r:id="rId2"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:footer="720"/><w:pgNumType w:start="1"/></w:sectPr></w:body></w:document>`;
+    const footerXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>';
     const files = [
-      ["[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'],
+      ["[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'],
       ["_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
-      ["word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+      ["word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>'],
       ["word/document.xml", documentXml],
-      ["word/styles.xml", '<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style></w:styles>']
+      ["word/styles.xml", '<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/><w:rPr><w:sz w:val="24"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="TOCTitle"><w:name w:val="Contents Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style></w:styles>'],
+      ["word/footer1.xml", footerXml],
+      ["word/settings.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:updateFields w:val="true"/></w:settings>']
     ];
     const link = document.createElement("a");
     link.href = URL.createObjectURL(zipStore(files));
@@ -3690,6 +3956,9 @@
     $("#rich-document-content").addEventListener("input", () => {
       syncRichEditor();
       markDirty();
+      if ($("#rich-document-content").classList.contains("manuscript-pages")) {
+        requestAnimationFrame(() => paginateManuscriptEditor());
+      }
     });
     $("#rich-document-content").addEventListener("contextmenu", event => {
       event.preventDefault();
@@ -3710,7 +3979,12 @@
         state.editorSelection = selection.getRangeAt(0).cloneRange();
       }
     });
+    window.addEventListener("resize", () => {
+      requestAnimationFrame(() => paginateManuscriptEditor());
+    });
     $("#document-title").addEventListener("input", markDirty);
+    $("#session-timer-toggle").addEventListener("click", toggleSessionTimer);
+    $("#session-timer-reset").addEventListener("click", resetSessionTimer);
     $("#project-switcher").addEventListener("click", openProjectManager);
     $("#folder-fallback").addEventListener("change", event => readFallbackFiles(event.target.files));
     $("#search-toggle").addEventListener("click", setupSearch);
@@ -3749,6 +4023,7 @@
     $("#new-lore-inline").addEventListener("click", () => showNewLoreMenu());
     $("#new-timeline").addEventListener("click", () => newFile("timeline"));
     $("#dictionary-open").addEventListener("click", () => void openDictionaryView());
+    $("#manuscript-index-open").addEventListener("click", () => void openManuscriptIndex());
     $("#new-menu").addEventListener("click", () => showNewLoreMenu());
     $$("[data-binder-toggle]").forEach(button => button.addEventListener("click", () => {
       const group = button.dataset.binderToggle;
@@ -3789,6 +4064,11 @@
     $("#editor-zoom-out").addEventListener("click", () => setEditorZoom(state.preferences.editorZoom - 10));
     $("#editor-zoom-in").addEventListener("click", () => setEditorZoom(state.preferences.editorZoom + 10));
     $("#editor-zoom-reset").addEventListener("click", () => setEditorZoom(100));
+    $("#focus-mode-toggle").addEventListener("click", () => {
+      const enabled = !document.body.classList.contains("focus-mode");
+      setFocusMode(enabled);
+      if (enabled) $("#rich-document-content").focus({ preventScroll: true });
+    });
     $$("[data-collapse]").forEach(button => button.addEventListener("click", () => {
       document.body.classList.toggle(button.dataset.collapse === "left" ? "left-hidden" : "right-hidden");
     }));
@@ -3812,6 +4092,11 @@
           else popup.remove();
           return;
         }
+        if (document.body.classList.contains("focus-mode")) {
+          event.preventDefault();
+          setFocusMode(false);
+          return;
+        }
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") { event.preventDefault(); setupSearch(); }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void saveActiveFile(); }
@@ -3823,6 +4108,14 @@
     });
     setupDragging();
     setupResizing();
+  }
+
+  function setFocusMode(enabled) {
+    document.body.classList.toggle("focus-mode", enabled);
+    const toggle = $("#focus-mode-toggle");
+    toggle.setAttribute("aria-pressed", String(enabled));
+    toggle.title = enabled ? "Exit focus mode (Esc)" : "Enter focus mode";
+    toggle.setAttribute("aria-label", enabled ? "Exit focus mode" : "Enter focus mode");
   }
 
   function loadPreferences() {
@@ -3852,12 +4145,14 @@
     state.preferences.editorZoom = Math.min(160, Math.max(70, Number(state.preferences.editorZoom) || 100));
     document.documentElement.style.setProperty("--editor-zoom", String(state.preferences.editorZoom / 100));
     updateEditorZoomControls();
-    document.documentElement.style.setProperty("--ui-scale", String(Math.min(1.3, Math.max(0.8, Number(state.preferences.uiScale) || 1))));
+    state.preferences.uiScale = Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, Number(state.preferences.uiScale) || UI_SCALE_MIN));
+    document.documentElement.style.setProperty("--ui-scale", String(state.preferences.uiScale));
   }
 
   function setEditorZoom(zoom) {
     state.preferences.editorZoom = Math.min(160, Math.max(70, zoom));
     applyPreferences();
+    requestAnimationFrame(() => paginateManuscriptEditor());
     savePreferences();
   }
 
@@ -3890,7 +4185,7 @@
           <section class="settings-page" data-settings-page="appearance"><div class="settings-page-heading"><h4>Appearance</h4><p>Set the mood and scale of your writing space.</p></div>
             <label class="setting-row"><span><strong>Color theme</strong><small>Choose a palette for your workspace.</small></span><select id="setting-theme"><option value="dark">Midnight</option><option value="light">Paper</option><option value="sepia">Sepia</option><option value="coffee">Coffee</option><option value="scifi">Sci-Fi</option></select></label>
             <div class="theme-preview-row"><button class="theme-preview" data-theme-choice="dark"><span class="theme-swatch dark-swatch"></span><strong>Midnight</strong><small>Calm and focused</small></button><button class="theme-preview" data-theme-choice="light"><span class="theme-swatch light-swatch"></span><strong>Paper</strong><small>Bright and clear</small></button><button class="theme-preview" data-theme-choice="sepia"><span class="theme-swatch sepia-swatch"></span><strong>Sepia</strong><small>Warm and gentle</small></button><button class="theme-preview" data-theme-choice="coffee"><span class="theme-swatch coffee-swatch"></span><strong>Coffee</strong><small>Roasted and cozy</small></button><button class="theme-preview" data-theme-choice="scifi"><span class="theme-swatch scifi-swatch"></span><strong>Sci-Fi</strong><small>Deep space glow</small></button></div>
-            <label class="setting-row scale-setting"><span><strong>Interface scale <output id="setting-scale-value">100%</output></strong><small>Resize menus, panels, controls, and dialogs.</small></span><input id="setting-ui-scale" type="range" min="80" max="130" step="5"></label>
+            <div class="setting-row scale-setting"><span><strong>Interface scale</strong><small>Resize menus, panels, controls, and dialogs.</small></span><div class="scale-control"><button id="setting-ui-scale-down" class="scale-control-button" type="button" aria-label="Decrease interface scale">−</button><output id="setting-scale-value" aria-live="polite">130%</output><button id="setting-ui-scale-up" class="scale-control-button" type="button" aria-label="Increase interface scale">+</button></div></div>
           </section>
           <section class="settings-page" data-settings-page="editor" hidden><div class="settings-page-heading"><h4>Editor</h4><p>Adjust the page for your preferred reading rhythm.</p></div>
             <label class="setting-row"><span><strong>Text size</strong><small>Markdown editing font size.</small></span><select id="setting-font-size"><option value="13">Small</option><option value="14">Default</option><option value="16">Large</option><option value="18">Extra large</option></select></label>
@@ -3949,19 +4244,26 @@
     const editorWidth = $("#setting-editor-width", backdrop);
     editorWidth.value = state.preferences.editorWidth || "comfortable";
     editorWidth.addEventListener("change", () => { state.preferences.editorWidth = editorWidth.value; applyPreferences(); savePreferences(); });
-    const uiScale = $("#setting-ui-scale", backdrop);
+    const scaleDown = $("#setting-ui-scale-down", backdrop);
+    const scaleUp = $("#setting-ui-scale-up", backdrop);
     const scaleValue = $("#setting-scale-value", backdrop);
-    uiScale.value = String(Math.round((Number(state.preferences.uiScale) || 1) * 100));
-    scaleValue.value = `${uiScale.value}%`;
-    scaleValue.textContent = `${uiScale.value}%`;
-    uiScale.addEventListener("input", () => {
-      const scale = Number(uiScale.value) / 100;
-      state.preferences.uiScale = scale;
-      scaleValue.value = `${uiScale.value}%`;
-      scaleValue.textContent = `${uiScale.value}%`;
+    const updateScaleControl = () => {
+      const scale = state.preferences.uiScale;
+      const percent = Math.round(scale * 100);
+      scaleValue.value = `${percent}%`;
+      scaleValue.textContent = `${percent}%`;
+      scaleDown.disabled = scale <= UI_SCALE_MIN;
+      scaleUp.disabled = scale >= UI_SCALE_MAX;
+    };
+    const changeUiScale = amount => {
+      state.preferences.uiScale = Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, Math.round((state.preferences.uiScale + amount) * 100) / 100));
       applyPreferences();
+      updateScaleControl();
       savePreferences();
-    });
+    };
+    updateScaleControl();
+    scaleDown.addEventListener("click", () => changeUiScale(-UI_SCALE_STEP));
+    scaleUp.addEventListener("click", () => changeUiScale(UI_SCALE_STEP));
     const dailyGoal = $("#setting-daily-goal", backdrop);
     dailyGoal.value = String(state.dailyGoal);
     dailyGoal.addEventListener("change", () => {
@@ -4237,6 +4539,7 @@
       } else throw error;
     }
     if (restored) {
+      restoreSessionTimer();
       restoreMetrics();
       renderAll();
       const firstChapter = [...state.files.keys()].find(path => category(path) === "chapter");
