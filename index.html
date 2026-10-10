@@ -57,7 +57,7 @@
               </div>
               <div class="tree-heading worldbuilding-heading"><button class="tree-disclosure" type="button" data-binder-toggle="worldbuilding" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>WORLDBUILDING</span></button><button class="text-button" id="new-lore" type="button" title="New worldbuilding entry" aria-label="New worldbuilding entry"><span class="add-glyph" aria-hidden="true"></span></button></div>
               <div data-binder-content="worldbuilding">
-                <div class="tree-subheading"><button class="tree-disclosure" type="button" data-binder-toggle="characters" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>CHARACTERS</span></button></div><div id="character-list" class="tree-list" data-binder-content="characters"></div>
+                <div class="tree-subheading"><button class="tree-disclosure" type="button" data-binder-toggle="characters" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>CHARACTERS</span></button><button class="text-button" id="new-character-folder" type="button" title="New character folder" aria-label="New character folder"><span class="add-glyph" aria-hidden="true"></span></button></div><div id="character-list" class="tree-list" data-binder-content="characters"></div>
                 <div class="tree-subheading tree-subheading-divider"><button class="tree-disclosure" type="button" data-binder-toggle="locations" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>LOCATIONS</span></button></div><div id="location-list" class="tree-list" data-binder-content="locations"></div>
                 <div class="tree-subheading tree-subheading-divider"><button class="tree-disclosure" type="button" data-binder-toggle="factions" aria-expanded="true"><span class="tree-chevron" aria-hidden="true"></span><span>FACTIONS</span></button></div><div id="faction-list" class="tree-list" data-binder-content="factions"></div>
                 <button class="tree-item dictionary-open" id="dictionary-open" type="button"><span class="tree-icon">≡</span><span class="tree-label">Dictionary</span></button>
@@ -158,7 +158,7 @@
                   <textarea id="chapter-notes" class="chapter-notes" aria-label="Chapter notes" placeholder="Jot down ideas, reminders, or things to revisit…"></textarea>
                 </div>
               </section>
-              <section class="inspector-section">
+              <section class="inspector-section" data-chapter-only hidden>
                 <div class="section-title"><button class="inspector-disclosure" type="button" data-inspector-toggle="writing-goals" aria-expanded="true" aria-controls="inspector-content-writing-goals"><span class="tree-chevron" aria-hidden="true"></span><h3>Writing goals</h3></button><button class="more-button" id="goal-settings" title="Set daily goal">•••</button></div>
                 <div id="inspector-content-writing-goals" data-inspector-content="writing-goals">
                   <div class="goal-card">
@@ -175,14 +175,14 @@
                   </div>
                 </div>
               </section>
-              <section class="inspector-section">
-                <div class="section-title"><button class="inspector-disclosure" type="button" data-inspector-toggle="sorth" aria-expanded="true" aria-controls="inspector-content-sorth"><span class="tree-chevron" aria-hidden="true"></span><h3>The Sorth</h3></button><span class="live-pill"><i></i> LIVE</span></div>
-                <div id="inspector-content-sorth" data-inspector-content="sorth">
+              <section class="inspector-section" data-chapter-only hidden>
+                <div class="section-title"><button class="inspector-disclosure" type="button" data-inspector-toggle="autolinks" aria-expanded="true" aria-controls="inspector-content-autolinks"><span class="tree-chevron" aria-hidden="true"></span><h3>AutoLinks</h3></button><span class="live-pill"><i></i> LIVE</span></div>
+                <div id="inspector-content-autolinks" data-inspector-content="autolinks">
                   <p class="section-caption">Names and places detected in this document.</p>
-                  <div id="sorth-results" class="sorth-list"></div>
+                  <div id="autolinks-results" class="autolinks-list"></div>
                 </div>
               </section>
-              <section class="inspector-section">
+              <section class="inspector-section" data-chapter-only hidden>
                 <div class="section-title"><button class="inspector-disclosure" type="button" data-inspector-toggle="document-details" aria-expanded="true" aria-controls="inspector-content-document-details"><span class="tree-chevron" aria-hidden="true"></span><h3>Document details</h3></button><button class="more-button" title="More details">•••</button></div>
                 <div id="inspector-content-document-details" data-inspector-content="document-details">
                   <div class="detail-list">
@@ -193,20 +193,20 @@
                   </div>
                 </div>
               </section>
-              <section class="inspector-section timeline-widget" data-panel="timeline">
+              <section class="inspector-section timeline-widget" data-panel="timeline" data-chapter-only hidden>
                 <div class="section-title"><button class="inspector-disclosure" type="button" data-inspector-toggle="story-timeline" aria-expanded="true" aria-controls="inspector-content-story-timeline"><span class="tree-chevron" aria-hidden="true"></span><h3>Story timeline</h3></button><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="timeline" title="Drag to dock timeline">⠿</button><button class="text-button" id="add-event" type="button" title="Add timeline event" aria-label="Add timeline event"><span class="add-glyph" aria-hidden="true"></span></button></span></div>
                 <div id="inspector-content-story-timeline" data-inspector-content="story-timeline">
                   <div class="timeline-track" id="timeline-events"></div>
                   <button class="outline-button" id="open-timeline">Open plot planner</button>
                 </div>
               </section>
-              <section class="inspector-section lore-widget" data-panel="lore">
+              <section class="inspector-section lore-widget" data-panel="lore" data-chapter-only hidden>
                 <div class="section-title"><button class="inspector-disclosure" type="button" data-inspector-toggle="worldbuilding" aria-expanded="true" aria-controls="inspector-content-worldbuilding"><span class="tree-chevron" aria-hidden="true"></span><h3>Worldbuilding</h3></button><span class="heading-actions"><button class="icon-button small panel-drag-handle" draggable="true" data-drag-panel="lore" title="Drag to dock worldbuilding">⠿</button><button class="text-button" id="new-lore-inline" type="button" title="New worldbuilding entry" aria-label="New worldbuilding entry"><span class="add-glyph" aria-hidden="true"></span></button></span></div>
                 <div id="inspector-content-worldbuilding" data-inspector-content="worldbuilding">
                   <p class="section-caption">Keep your world's details close at hand.</p>
                   <div id="related-lore" class="related-lore"></div>
-                </div>
               </section>
+              </div>
             </div>
           </section>
         </aside>

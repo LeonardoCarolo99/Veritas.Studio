@@ -59,7 +59,7 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 
 - A binder for chapters, characters, locations, factions, timelines, and a custom-word dictionary
 - Structured worldbuilding fields with editable templates
-- **The Sorth** surfaces worldbuilding notes mentioned in your draft
+- **AutoLinks** surfaces worldbuilding notes mentioned in your draft while editing chapters
 - A plot planner for story threads, events, arcs, and Surface/Shadow layers
 - Vault-wide search to find the detail you know you wrote
 
@@ -172,6 +172,8 @@ My Novel/
 ├── Publishing/       Book, launch, and portfolio data
 └── config.json       Project settings and writing goals
 ```
+
+In the Worldbuilding binder, create character folders to group entries such as main and side characters. Locations can be nested under a parent location using the **Parent location** field; this relationship is saved with each location's structured data.
 
 ## Windows desktop
 

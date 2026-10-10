@@ -258,6 +258,28 @@
     return "lore";
   }
 
+  function projectConfig() {
+    const config = JSON.parse(state.files.get("config.json") || "{}");
+    if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("config.json must contain a JSON object.");
+    return config;
+  }
+
+  function characterFolders() {
+    try {
+      const folders = projectConfig().characterFolders;
+      if (!Array.isArray(folders)) return [];
+      return folders.map(folder => typeof folder === "string"
+        ? { id: folder, name: folder }
+        : folder && typeof folder.id === "string" && typeof folder.name === "string"
+          ? { id: folder.id, name: folder.name }
+          : null).filter(Boolean);
+    } catch (error) {
+      console.error("Could not read character folders from config.json.", error);
+      notify("Character folders could not be loaded.");
+      return [];
+    }
+  }
+
   function isEntityPath(path) {
     return path.endsWith(".md") && category(path) === "lore";
   }
@@ -2319,6 +2341,7 @@
       const type = category(path);
       const bucket = type === "lore" ? worldbuildingType(path) : type;
       if (!sets[bucket]) return;
+      if (bucket === "character" || bucket === "location") return;
       const item = document.createElement("div");
       item.className = `tree-item${path === state.activePath ? " active" : ""}`;
       item.dataset.path = path;
@@ -2340,7 +2363,9 @@
       });
       sets[bucket].append(item);
     });
-    Object.entries(sets).forEach(([type, container]) => {
+    renderCharacterBinder(sets.character, paths.filter(path => isEntityPath(path) && worldbuildingType(path) === "character"));
+    renderLocationBinder(sets.location, paths.filter(path => isEntityPath(path) && worldbuildingType(path) === "location"));
+    Object.entries(sets).filter(([type]) => type !== "character" && type !== "location").forEach(([type, container]) => {
       if (!container.children.length) container.innerHTML = `<div class="empty-hint">No ${type === "chapter" ? "chapters" : `${type}s`} yet.</div>`;
     });
     if (state.currentView === "manuscript-index" && !$("#lifecycle-view").hidden) {
@@ -2348,17 +2373,111 @@
     }
   }
 
+  function createEntityBinderItem(path, depth = 0) {
+    const item = document.createElement("div");
+    item.className = `tree-item${path === state.activePath ? " active" : ""}`;
+    item.dataset.path = path;
+    item.style.paddingLeft = `${8 + depth * 14}px`;
+    const label = entityData(path).Name || basename(path);
+    item.innerHTML = `<span class="tree-icon">◇</span><span class="tree-label">${escapeHtml(label)}</span>`;
+    item.addEventListener("click", () => openFile(path));
+    item.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      showBinderContextMenu(path, event.clientX, event.clientY);
+    });
+    return item;
+  }
+
+  function renderCharacterBinder(container, paths) {
+    container.replaceChildren();
+    const folders = characterFolders();
+    const groupedPaths = new Set();
+    folders.forEach(folder => {
+      const groupPaths = paths.filter(path => entityData(path)._veritasFolderId === folder.id);
+      groupPaths.forEach(path => groupedPaths.add(path));
+      const group = document.createElement("div");
+      group.className = "character-folder-group";
+      const heading = document.createElement("div");
+      heading.className = "character-folder-heading";
+      const toggle = document.createElement("button");
+      toggle.className = "tree-disclosure";
+      toggle.type = "button";
+      toggle.dataset.characterFolderToggle = folder.id;
+      toggle.innerHTML = `<span class="tree-chevron" aria-hidden="true"></span><span>${escapeHtml(folder.name)}</span>`;
+      const collapsed = Boolean(state.collapsedBinderGroups[`character-folder-${folder.id}`]);
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      const list = document.createElement("div");
+      list.className = "tree-list character-folder-list";
+      list.hidden = collapsed;
+      groupPaths.forEach(path => list.append(createEntityBinderItem(path)));
+      toggle.addEventListener("click", () => {
+        const next = !list.hidden;
+        list.hidden = next;
+        toggle.setAttribute("aria-expanded", String(!next));
+        state.collapsedBinderGroups[`character-folder-${folder.id}`] = next;
+        try {
+          localStorage.setItem(BINDER_COLLAPSE_KEY, JSON.stringify(state.collapsedBinderGroups));
+        } catch (error) {
+          console.error("Could not save binder category preferences.", error);
+          notify("Could not save binder category preferences.");
+        }
+      });
+      heading.append(toggle);
+      heading.addEventListener("contextmenu", event => {
+        event.preventDefault();
+        showCharacterFolderContextMenu(folder, event.clientX, event.clientY);
+      });
+      group.append(heading, list);
+      container.append(group);
+    });
+    const rootPaths = paths.filter(path => !groupedPaths.has(path));
+    rootPaths.forEach(path => container.append(createEntityBinderItem(path)));
+    if (!container.children.length) container.innerHTML = '<div class="empty-hint">No characters yet.</div>';
+  }
+
+  function renderLocationBinder(container, paths) {
+    container.replaceChildren();
+    const pathSet = new Set(paths);
+    const children = new Map();
+    paths.forEach(path => {
+      const parent = entityData(path)._veritasParentLocationPath;
+      const validParent = pathSet.has(parent) && parent !== path ? parent : "";
+      if (!children.has(validParent)) children.set(validParent, []);
+      children.get(validParent).push(path);
+    });
+    const rendered = new Set();
+    const appendChildren = (parent, depth) => {
+      (children.get(parent) || []).forEach(path => {
+        if (rendered.has(path)) return;
+        rendered.add(path);
+        container.append(createEntityBinderItem(path, depth));
+        appendChildren(path, depth + 1);
+      });
+    };
+    appendChildren("", 0);
+    paths.filter(path => !rendered.has(path)).forEach(path => {
+      container.append(createEntityBinderItem(path));
+      rendered.add(path);
+      appendChildren(path, 1);
+    });
+    if (!container.children.length) container.innerHTML = '<div class="empty-hint">No locations yet.</div>';
+  }
+
   function showBinderContextMenu(path, x, y) {
     $(".context-menu")?.remove();
     const menu = document.createElement("div");
     menu.className = "context-menu";
     menu.setAttribute("role", "menu");
-    menu.innerHTML = '<button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>';
+    const actions = worldbuildingType(path) === "character"
+      ? '<button type="button" role="menuitem" data-binder-action="move">Move to folder…</button><button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>'
+      : '<button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>';
+    menu.innerHTML = actions;
     positionContextMenu(menu, x, y);
     menu.addEventListener("click", event => {
       const action = event.target.closest("[data-binder-action]")?.dataset.binderAction;
       menu.remove();
-      if (action === "rename") void renameBinderFile(path);
+      if (action === "move") void moveCharacterToFolder(path);
+      else if (action === "rename") void renameBinderFile(path);
       else if (action === "delete") void deleteBinderFile(path);
     });
     $("button", menu).focus();
@@ -2368,6 +2487,119 @@
         document.removeEventListener("click", dismiss);
       }
     }), 0);
+  }
+
+  function showCharacterFolderContextMenu(folder, x, y) {
+    $(".context-menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "context-menu";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = '<button type="button" role="menuitem" data-folder-action="rename">Rename folder…</button><button type="button" role="menuitem" data-folder-action="delete">Delete empty folder</button>';
+    positionContextMenu(menu, x, y);
+    menu.addEventListener("click", event => {
+      const action = event.target.closest("[data-folder-action]")?.dataset.folderAction;
+      menu.remove();
+      if (action === "rename") void renameCharacterFolder(folder);
+      else if (action === "delete") void deleteCharacterFolder(folder);
+    });
+    $("button", menu).focus();
+    setTimeout(() => document.addEventListener("click", function dismiss(event) {
+      if (!menu.isConnected || !menu.contains(event.target)) {
+        menu.remove();
+        document.removeEventListener("click", dismiss);
+      }
+    }), 0);
+  }
+
+  async function saveCharacterFolders(folders) {
+    const config = projectConfig();
+    config.characterFolders = folders;
+    const content = JSON.stringify(config, null, 2);
+    if (state.dirHandle) await writeVaultFile("config.json", content);
+    state.files.set("config.json", content);
+    persistBrowserState();
+    renderBinder();
+  }
+
+  async function createCharacterFolder() {
+    const name = await promptDialog("New character folder", "Folder name");
+    if (name === null) return;
+    if (!name || /[\\/]/.test(name) || name === "." || name === "..") {
+      notify("Enter a valid folder name without path separators.");
+      return;
+    }
+    const folders = characterFolders();
+    if (folders.some(folder => folder.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      notify("A character folder with that name already exists.");
+      return;
+    }
+    try {
+      await saveCharacterFolders([...folders, { id: crypto.randomUUID(), name }]);
+      notify("Character folder created");
+    } catch (error) {
+      console.error("Could not create character folder.", error);
+      notify(`Could not create folder: ${error.message}`);
+    }
+  }
+
+  async function renameCharacterFolder(folder) {
+    const name = await promptDialog("Rename character folder", "Folder name", folder.name);
+    if (name === null) return;
+    if (!name || /[\\/]/.test(name) || name === "." || name === "..") {
+      notify("Enter a valid folder name without path separators.");
+      return;
+    }
+    const folders = characterFolders();
+    if (folders.some(item => item.id !== folder.id && item.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      notify("A character folder with that name already exists.");
+      return;
+    }
+    try {
+      await saveCharacterFolders(folders.map(item => item.id === folder.id ? { ...item, name } : item));
+      notify("Character folder renamed");
+    } catch (error) {
+      console.error("Could not rename character folder.", error);
+      notify(`Could not rename folder: ${error.message}`);
+    }
+  }
+
+  async function deleteCharacterFolder(folder) {
+    const assigned = [...state.files.keys()].filter(path => isEntityPath(path) && worldbuildingType(path) === "character" && entityData(path)._veritasFolderId === folder.id);
+    if (assigned.length) {
+      notify("Move the characters out of this folder before deleting it.");
+      return;
+    }
+    if (!await confirmDialog(`Delete the empty “${folder.name}” folder?`)) return;
+    try {
+      await saveCharacterFolders(characterFolders().filter(item => item.id !== folder.id));
+      notify("Character folder deleted");
+    } catch (error) {
+      console.error("Could not delete character folder.", error);
+      notify(`Could not delete folder: ${error.message}`);
+    }
+  }
+
+  async function moveCharacterToFolder(path) {
+    const folders = characterFolders();
+    const folderId = await selectDialog("Move character", "Choose a folder", [
+      { value: "", label: "Unfiled" },
+      ...folders.map(folder => ({ value: folder.id, label: folder.name }))
+    ], entityData(path)._veritasFolderId || "");
+    if (folderId === null) return;
+    const data = entityData(path);
+    if (folderId) data._veritasFolderId = folderId;
+    else delete data._veritasFolderId;
+    try {
+      const companion = companionPath(path);
+      const content = JSON.stringify(data, null, 2);
+      if (state.dirHandle) await writeVaultFile(companion, content);
+      state.files.set(companion, content);
+      persistBrowserState();
+      renderBinder();
+    } catch (error) {
+      console.error("Could not move character to folder.", error);
+      notify(`Could not move character: ${error.message}`);
+    }
   }
 
   function showEditorContextMenu(x, y) {
@@ -2498,6 +2730,7 @@
       state.manuscriptNotes[newPath] = state.manuscriptNotes[path];
       delete state.manuscriptNotes[path];
     }
+    if (worldbuildingType(path) === "location") await updateLocationChildren(path, newPath);
     persistBrowserState();
     renderAll();
     if (state.activePath === newPath) openFile(newPath);
@@ -2531,6 +2764,7 @@
     }
     state.files.delete(path);
     if (hasCompanion) state.files.delete(oldCompanion);
+    if (worldbuildingType(path) === "location") await updateLocationChildren(path);
     delete state.manuscriptNotes[path];
     state.tabs = state.tabs.filter(tab => tab !== path);
     if (state.splitPath === path) {
@@ -2557,6 +2791,29 @@
       }
     }
     notify("Document deleted");
+  }
+
+  async function updateLocationChildren(oldPath, newPath = "") {
+    let saveFailed = false;
+    const locations = [...state.files.keys()].filter(path => isEntityPath(path) && worldbuildingType(path) === "location");
+    for (const path of locations) {
+      const data = entityData(path);
+      if (data._veritasParentLocationPath !== oldPath) continue;
+      if (newPath) data._veritasParentLocationPath = newPath;
+      else delete data._veritasParentLocationPath;
+      const companion = companionPath(path);
+      const content = JSON.stringify(data, null, 2);
+      state.files.set(companion, content);
+      try {
+        if (state.dirHandle) await writeVaultFile(companion, content);
+      } catch (error) {
+        saveFailed = true;
+        console.error(`Could not update the parent location for ${basename(path)}.`, error);
+      }
+    }
+    if (saveFailed) notify("Some child location links could not be saved to the project folder.");
+    persistBrowserState();
+    renderBinder();
   }
 
   async function renameVaultFile(oldPath, newPath, content) {
@@ -2632,6 +2889,56 @@
       label.append(input);
       container.append(label);
     });
+    if (type === "character") {
+      const label = document.createElement("label");
+      label.className = "entity-field";
+      label.innerHTML = "<span>Folder</span>";
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", "Character folder");
+      const unfiled = document.createElement("option");
+      unfiled.value = "";
+      unfiled.textContent = "Unfiled";
+      select.append(unfiled);
+      characterFolders().forEach(folder => {
+        const option = document.createElement("option");
+        option.value = folder.id;
+        option.textContent = folder.name;
+        select.append(option);
+      });
+      select.value = data._veritasFolderId || "";
+      select.addEventListener("change", () => updateEntityField(path, "_veritasFolderId", select.value, "text"));
+      label.append(select);
+      container.append(label);
+    } else if (type === "location") {
+      const label = document.createElement("label");
+      label.className = "entity-field";
+      label.innerHTML = "<span>Parent location</span>";
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", "Parent location");
+      const noParent = document.createElement("option");
+      noParent.value = "";
+      noParent.textContent = "None";
+      select.append(noParent);
+      const locationPaths = [...state.files.keys()].filter(item => isEntityPath(item) && worldbuildingType(item) === "location");
+      locationPaths.forEach(candidate => {
+        if (candidate === path) return;
+        let ancestor = candidate;
+        const seen = new Set();
+        while (ancestor && !seen.has(ancestor)) {
+          if (ancestor === path) return;
+          seen.add(ancestor);
+          ancestor = entityData(ancestor)._veritasParentLocationPath;
+        }
+        const option = document.createElement("option");
+        option.value = candidate;
+        option.textContent = entityData(candidate).Name || basename(candidate);
+        select.append(option);
+      });
+      select.value = data._veritasParentLocationPath || "";
+      select.addEventListener("change", () => updateEntityField(path, "_veritasParentLocationPath", select.value, "text"));
+      label.append(select);
+      container.append(label);
+    }
     container.hidden = false;
   }
 
@@ -2647,9 +2954,9 @@
     state.files.set(companionPath(path), JSON.stringify(data, null, 2));
     if (name === "Name" && state.activePath === path) {
       $("#document-title").value = value;
-      updateSorth();
-      renderBinder();
+      updateAutoLinks();
     }
+    if (["Name", "_veritasFolderId", "_veritasParentLocationPath"].includes(name)) renderBinder();
     markDirty();
   }
 
@@ -2699,7 +3006,7 @@
     renderTabs();
     renderBinder();
     updateStats();
-    updateSorth();
+    updateAutoLinks();
   }
 
   function renderChapterNotes() {
@@ -2707,6 +3014,7 @@
     const notesInput = $("#chapter-notes");
     const isChapter = state.activePath.endsWith(".md") && category(state.activePath) === "chapter";
     notesSection.hidden = !isChapter;
+    $$("[data-chapter-only]").forEach(section => { section.hidden = !isChapter; });
     notesInput.value = isChapter ? state.manuscriptNotes[state.activePath] || "" : "";
     if (isChapter) $("#chapter-notes-context").textContent = basename(state.activePath);
   }
@@ -3060,7 +3368,7 @@
     state.lastWordCount = currentWords;
     persistMetrics();
     updateStats();
-    updateSorth();
+    updateAutoLinks();
     clearTimeout(state.saveTimer);
     state.saveTimer = setTimeout(() => saveActiveFile(), 450);
   }
@@ -3155,7 +3463,7 @@
     }
   }
 
-  function updateSorth() {
+  function updateAutoLinks() {
     clearTimeout(state.scanTimer);
     state.scanTimer = setTimeout(() => {
       const text = `${$("#document-title").value}\n${editorBodyText()}`.toLocaleLowerCase();
@@ -3163,7 +3471,7 @@
         .filter(path => isEntityPath(path))
         .map(path => ({ path, name: basename(path) }))
         .filter(entry => entry.name.length > 1 && text.includes(entry.name.toLocaleLowerCase()));
-      const results = $("#sorth-results");
+      const results = $("#autolinks-results");
       results.replaceChildren();
       if (!matches.length) {
         results.innerHTML = '<div class="empty-hint">No linked entries found in this document.</div>';
@@ -3171,8 +3479,8 @@
       }
       matches.slice(0, 6).forEach(entry => {
         const button = document.createElement("button");
-        button.className = "sorth-item";
-        button.innerHTML = `<span class="sorth-mark">◇</span><strong>${escapeHtml(entry.name)}</strong><small>${category(entry.path) === "lore" ? entry.path.split("/")[1] : ""}</small>`;
+        button.className = "autolinks-item";
+        button.innerHTML = `<span class="autolinks-mark">◇</span><strong>${escapeHtml(entry.name)}</strong><small>${category(entry.path) === "lore" ? entry.path.split("/")[1] : ""}</small>`;
         button.addEventListener("click", () => openFile(entry.path));
         results.append(button);
       });
@@ -3272,6 +3580,28 @@
       document.body.append(backdrop);
       input.focus();
       input.select();
+    });
+  }
+
+  function selectDialog(title, labelText, options, initial = "") {
+    return new Promise(resolve => {
+      const backdrop = document.createElement("div");
+      backdrop.className = "dialog-backdrop";
+      backdrop.innerHTML = `<form class="dialog-card"><h3>${escapeHtml(title)}</h3><label class="schema-type-label">${escapeHtml(labelText)}<select></select></label><div class="dialog-actions"><button type="button" data-cancel>Cancel</button><button class="primary" type="submit">Move</button></div></form>`;
+      const select = $("select", backdrop);
+      options.forEach(option => {
+        const element = document.createElement("option");
+        element.value = option.value;
+        element.textContent = option.label;
+        select.append(element);
+      });
+      select.value = initial;
+      const finish = value => { backdrop.remove(); resolve(value); };
+      $("form", backdrop).addEventListener("submit", event => { event.preventDefault(); finish(select.value); });
+      $("[data-cancel]", backdrop).addEventListener("click", () => finish(null));
+      backdrop.addEventListener("click", event => { if (event.target === backdrop) finish(null); });
+      document.body.append(backdrop);
+      select.focus();
     });
   }
 
@@ -4021,6 +4351,7 @@
     $("#new-chapter").addEventListener("click", () => newFile("chapter"));
     $("#new-lore").addEventListener("click", () => showNewLoreMenu());
     $("#new-lore-inline").addEventListener("click", () => showNewLoreMenu());
+    $("#new-character-folder").addEventListener("click", () => void createCharacterFolder());
     $("#new-timeline").addEventListener("click", () => newFile("timeline"));
     $("#dictionary-open").addEventListener("click", () => void openDictionaryView());
     $("#manuscript-index-open").addEventListener("click", () => void openManuscriptIndex());
