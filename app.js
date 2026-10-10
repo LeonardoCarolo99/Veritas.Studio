@@ -1893,7 +1893,7 @@
       <header class="modal-heading"><div><span class="eyebrow">WORKSPACES</span><h3 id="project-manager-title">Your projects</h3></div><button class="icon-button small" type="button" data-close-manager aria-label="Close">×</button></header>
       <p class="modal-intro">Keep each novel's manuscript, planning, and module settings in its own workspace.</p>
       <div class="project-manager-list">${projects || '<div class="empty-hint">No projects yet. Create your first writing workspace.</div>'}</div>
-      <footer class="project-manager-actions"><button class="button-secondary" type="button" data-import-project>Import project</button><button class="button-secondary" type="button" data-export-project>Export project</button><button class="button-secondary" type="button" data-create-project="browser">＋ New browser project</button><button class="button-primary" type="button" data-create-project="folder">＋ New project folder</button><button class="button-secondary" type="button" data-copy-project-to-folder ${currentProject?.storage === "folder" ? "disabled title=\"This project already saves to a folder\"" : ""}>Copy current project into repository root</button><button class="button-secondary" type="button" data-open-project-folder>Open project folder…</button></footer>
+      <footer class="project-manager-actions"><button class="button-secondary" type="button" data-import-project>Import project</button><button class="button-secondary" type="button" data-backup-project>Back up project</button><button class="button-secondary" type="button" data-restore-project>Restore from backup…</button><button class="button-secondary" type="button" data-create-project="browser">＋ New browser project</button><button class="button-primary" type="button" data-create-project="folder">＋ New project folder</button><button class="button-secondary" type="button" data-copy-project-to-folder ${currentProject?.storage === "folder" ? "disabled title=\"This project already saves to a folder\"" : ""}>Copy current project into repository root</button><button class="button-secondary" type="button" data-open-project-folder>Open project folder…</button></footer>
     </section>`;
     const close = () => backdrop.remove();
     backdrop.addEventListener("click", event => {
@@ -1913,8 +1913,9 @@
         close();
         void createProject(makeFolder);
       }
-      if (event.target.closest("[data-import-project]")) { close(); chooseProjectImportFile(); }
-      if (event.target.closest("[data-export-project]")) { close(); void exportProject(); }
+      if (event.target.closest("[data-import-project]")) { void chooseProjectImportFile().then(done => { if (done) close(); }); }
+      if (event.target.closest("[data-backup-project]")) { void backupProject(); }
+      if (event.target.closest("[data-restore-project]")) { void chooseProjectRestoreFile().then(done => { if (done) close(); }); }
       if (event.target.closest("[data-copy-project-to-folder]")) { close(); void copyProjectToFolder(); }
       if (event.target.closest("[data-open-project-folder]")) { close(); void openVault(); }
     });
@@ -1950,83 +1951,101 @@
     document.body.append(backdrop);
   }
 
-  async function exportProject() {
+  function projectFileBaseName(name) {
+    return name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "Veritas Project";
+  }
+
+  function currentProjectBundle(project) {
+    return {
+      format: "veritas-studio-project",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      project: { name: project.name, modules: project.modules },
+      snapshot: {
+        dailyGoal: state.dailyGoal,
+        dailyWords: state.dailyWords,
+        dayStartWords: state.dayStartWords,
+        sessionStart: state.sessionStart,
+        manuscriptNotes: state.manuscriptNotes
+      },
+      files: [...state.files].map(([path, content]) => ({ path, content }))
+    };
+  }
+
+  async function readyProjectForBundle() {
+    clearTimeout(state.saveTimer);
+    await saveActiveFile();
+    if (state.dirty) throw new Error("The current document could not be saved. Resolve the save issue before continuing.");
+    const project = activeProject();
+    if (!project) throw new Error("There is no active project.");
+    return project;
+  }
+
+  async function backupProject() {
     try {
-      clearTimeout(state.saveTimer);
-      await saveActiveFile();
-      if (state.dirty) throw new Error("The current document could not be saved. Resolve the save issue before exporting.");
-      const project = activeProject();
-      if (!project) throw new Error("There is no active project to export.");
-      const bundle = {
-        format: "veritas-studio-project",
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        project: { name: project.name, modules: project.modules },
-        snapshot: {
-          dailyGoal: state.dailyGoal,
-          dailyWords: state.dailyWords,
-          dayStartWords: state.dayStartWords,
-          sessionStart: state.sessionStart,
-          manuscriptNotes: state.manuscriptNotes
-        },
-        files: [...state.files].map(([path, content]) => ({ path, content }))
-      };
-      if (!bundle.files.length) throw new Error("The active project has no files to export.");
-      const filename = `${project.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "Veritas Project"}.veritas.json`;
-      downloadText(filename, JSON.stringify(bundle, null, 2), "application/json");
+      const project = await readyProjectForBundle();
+      const bundle = currentProjectBundle(project);
+      if (!bundle.files.length) throw new Error("The active project has no files to back up.");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const filename = `${projectFileBaseName(project.name)}-backup-${stamp}.veritas.json`;
+      downloadText(filename, JSON.stringify(bundle, null, 2), "application/json", `Backup saved: ${filename}`);
     } catch (error) {
-      console.error("Could not export project.", error);
-      notify(`Could not export project: ${error.message}`);
+      console.error("Could not back up project.", error);
+      notify(`Could not back up project: ${error.message}`);
     }
   }
 
   function chooseProjectImportFile() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".veritas.json,application/json";
-    input.addEventListener("cancel", () => input.remove(), { once: true });
-    input.addEventListener("change", async () => {
-      const [file] = input.files || [];
-      input.remove();
-      if (!file) return;
-      try {
-        const bundle = JSON.parse(await file.text());
-        const { project, snapshot } = createImportedProject(bundle);
-        const storageKey = `${PROJECT_DATA_PREFIX}${project.id}`;
-        localStorage.setItem(storageKey, JSON.stringify(snapshot));
-        state.projects.push(project);
+    return new Promise(resolve => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".veritas.json,application/json";
+      input.addEventListener("cancel", () => { input.remove(); resolve(false); }, { once: true });
+      input.addEventListener("change", async () => {
+        const [file] = input.files || [];
+        input.remove();
+        if (!file) { resolve(false); return; }
         try {
-          persistProjectCatalog();
+          const bundle = JSON.parse(await file.text());
+          const { project, snapshot } = createImportedProject(bundle);
+          const storageKey = `${PROJECT_DATA_PREFIX}${project.id}`;
+          localStorage.setItem(storageKey, JSON.stringify(snapshot));
+          state.projects.push(project);
+          try {
+            persistProjectCatalog();
+          } catch (error) {
+            state.projects.pop();
+            localStorage.removeItem(storageKey);
+            throw error;
+          }
+          await switchProject(project.id);
+          notify(`Imported ${project.name}`);
+          resolve(true);
         } catch (error) {
-          state.projects.pop();
-          localStorage.removeItem(storageKey);
-          throw error;
+          console.error("Could not import project.", error);
+          notify(`Could not import project: ${error.message}`);
+          resolve(false);
         }
-        await switchProject(project.id);
-        notify(`Imported ${project.name}`);
-      } catch (error) {
-        console.error("Could not import project.", error);
-        notify(`Could not import project: ${error.message}`);
-      }
-    }, { once: true });
-    input.click();
+      }, { once: true });
+      input.click();
+    });
   }
 
-  function createImportedProject(bundle) {
+  function normalizeProjectBundle(bundle) {
     if (!bundle || bundle.format !== "veritas-studio-project" || bundle.version !== 1) {
-      throw new Error("This is not a supported Veritas Studio project export.");
+      throw new Error("This is not a supported Veritas Studio project archive.");
     }
     if (!bundle.project || typeof bundle.project.name !== "string" || !bundle.project.name.trim()) {
-      throw new Error("The project export has no valid project name.");
+      throw new Error("The project archive has no valid project name.");
     }
     if (!Array.isArray(bundle.files) || !bundle.files.length) {
-      throw new Error("The project export contains no project files.");
+      throw new Error("The project archive contains no project files.");
     }
     const files = [];
     const paths = new Set();
     for (const file of bundle.files) {
       if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
-        throw new Error("The project export contains an invalid file entry.");
+        throw new Error("The project archive contains an invalid file entry.");
       }
       const segments = file.path.split("/");
       if (!file.path || file.path.includes("\\") || file.path.includes("\0")
@@ -2034,9 +2053,9 @@
           || /[<>:"|?*\u0000-\u001f]/.test(segment) || /[. ]$/.test(segment)
           || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment))
         || !/\.(md|json)$/i.test(file.path)) {
-        throw new Error(`The project export contains an unsafe or unsupported file path: ${file.path}`);
+        throw new Error(`The project archive contains an unsafe or unsupported file path: ${file.path}`);
       }
-      if (paths.has(file.path)) throw new Error(`The project export contains a duplicate file path: ${file.path}`);
+      if (paths.has(file.path)) throw new Error(`The project archive contains a duplicate file path: ${file.path}`);
       paths.add(file.path);
       files.push({ path: file.path, content: file.content });
     }
@@ -2050,24 +2069,132 @@
       ? Object.fromEntries(Object.entries(snapshot.manuscriptNotes).filter(([path, note]) =>
         typeof note === "string" && files.some(file => file.path === path && file.path.endsWith(".md") && category(file.path) === "chapter")))
       : {};
+    return {
+      name: bundle.project.name.trim(),
+      files,
+      modules,
+      manuscriptNotes,
+      exportedAt: typeof bundle.exportedAt === "string" ? bundle.exportedAt : "",
+      dailyGoal: Number.isFinite(Number(snapshot.dailyGoal)) && Number(snapshot.dailyGoal) > 0 ? Number(snapshot.dailyGoal) : DEFAULT_GOAL,
+      dailyWords: Number.isFinite(Number(snapshot.dailyWords)) && Number(snapshot.dailyWords) >= 0 ? Number(snapshot.dailyWords) : 0,
+      dayStartWords: Number.isFinite(Number(snapshot.dayStartWords)) && Number(snapshot.dayStartWords) >= 0 ? Number(snapshot.dayStartWords) : 0,
+      sessionStart: Number.isFinite(Number(snapshot.sessionStart)) && Number(snapshot.sessionStart) > 0 ? Number(snapshot.sessionStart) : Date.now()
+    };
+  }
+
+  function createImportedProject(bundle) {
+    const parsed = normalizeProjectBundle(bundle);
     const project = {
       id: `project-${crypto.randomUUID()}`,
-      name: bundle.project.name.trim(),
+      name: parsed.name,
       storage: "browser",
-      modules
+      modules: parsed.modules
     };
     return {
       project,
       snapshot: {
         name: project.name,
-        files,
-        dailyGoal: Number.isFinite(Number(snapshot.dailyGoal)) && Number(snapshot.dailyGoal) > 0 ? Number(snapshot.dailyGoal) : DEFAULT_GOAL,
-        dailyWords: Number.isFinite(Number(snapshot.dailyWords)) && Number(snapshot.dailyWords) >= 0 ? Number(snapshot.dailyWords) : 0,
-        dayStartWords: Number.isFinite(Number(snapshot.dayStartWords)) && Number(snapshot.dayStartWords) >= 0 ? Number(snapshot.dayStartWords) : 0,
-        sessionStart: Number.isFinite(Number(snapshot.sessionStart)) && Number(snapshot.sessionStart) > 0 ? Number(snapshot.sessionStart) : Date.now(),
-        manuscriptNotes
+        files: parsed.files,
+        dailyGoal: parsed.dailyGoal,
+        dailyWords: parsed.dailyWords,
+        dayStartWords: parsed.dayStartWords,
+        sessionStart: parsed.sessionStart,
+        manuscriptNotes: parsed.manuscriptNotes
       }
     };
+  }
+
+  function chooseProjectRestoreFile() {
+    return new Promise(resolve => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".veritas.json,application/json";
+      input.addEventListener("cancel", () => { input.remove(); resolve(false); }, { once: true });
+      input.addEventListener("change", async () => {
+        const [file] = input.files || [];
+        input.remove();
+        if (!file) { resolve(false); return; }
+        try {
+          const bundle = JSON.parse(await file.text());
+          resolve(await restoreProjectFromBundle(bundle));
+        } catch (error) {
+          console.error("Could not restore project.", error);
+          notify(`Could not restore project: ${error.message}`);
+          resolve(false);
+        }
+      }, { once: true });
+      input.click();
+    });
+  }
+
+  async function restoreProjectFromBundle(bundle) {
+    const parsed = normalizeProjectBundle(bundle);
+    const project = await readyProjectForBundle();
+    const safety = currentProjectBundle(project);
+    const confirmed = await confirmRestoreDialog(project.name, parsed.exportedAt, parsed.files.length);
+    if (!confirmed) return false;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const safetyName = `${projectFileBaseName(project.name)}-before-restore-${stamp}.veritas.json`;
+    downloadText(safetyName, JSON.stringify(safety, null, 2), "application/json", `Safety copy saved: ${safetyName}`);
+
+    const previousPaths = new Set(state.files.keys());
+    state.files = new Map(parsed.files.map(file => [file.path, file.content]));
+    state.manuscriptNotes = { ...parsed.manuscriptNotes };
+    state.dailyGoal = parsed.dailyGoal;
+    project.modules = parsed.modules;
+    let config = {};
+    try { config = JSON.parse(state.files.get("config.json") || "{}"); }
+    catch (error) { console.error("Could not parse the restored config.json.", error); }
+    config.name = project.name;
+    config.modules = project.modules;
+    state.files.set("config.json", JSON.stringify(config, null, 2));
+
+    clearTimeout(state.saveTimer);
+    state.dirty = false;
+    state.tabs = [];
+    state.activePath = "";
+    if (!project.modules[state.currentModule]) {
+      state.currentModule = project.modules.writing ? "writing" : MODULES.find(module => project.modules[module.id])?.id || "writing";
+    }
+
+    const removed = [...previousPaths].filter(path => !state.files.has(path));
+    if (state.dirHandle) {
+      const failed = [];
+      for (const [path, content] of state.files) {
+        try { await writeVaultFile(path, content); }
+        catch (error) { failed.push(path); console.error(`Could not write ${path} after restore.`, error); }
+      }
+      for (const path of removed) {
+        try { await deleteVaultFile(path); }
+        catch (error) { failed.push(path); console.error(`Could not remove ${path} after restore.`, error); }
+      }
+      if (failed.length) notify(`Restored in the app, but some files could not be updated on disk: ${failed.join(", ")}`);
+    }
+    persistBrowserState();
+    persistProjectCatalog();
+    updateProjectLabels();
+    renderAll();
+    const first = [...state.files.keys()].find(path => path.startsWith("Manuscript/")) || [...state.files.keys()].find(path => path !== "config.json");
+    if (first) openFile(first);
+    else if (project.modules.writing) showEmptyEditor();
+    else showModule(state.currentModule);
+    notify(`Restored ${project.name} from backup`);
+    return true;
+  }
+
+  function confirmRestoreDialog(projectName, exportedAt, fileCount) {
+    const when = exportedAt ? new Date(exportedAt).toLocaleString() : "an unknown date";
+    return new Promise(resolve => {
+      const backdrop = document.createElement("div");
+      backdrop.className = "dialog-backdrop";
+      backdrop.innerHTML = `<section class="dialog-card" role="alertdialog" aria-modal="true"><h3>Restore this project?</h3><p>Replace <strong>${escapeHtml(projectName)}</strong> with the backup from ${escapeHtml(when)} (${fileCount} files). A safety copy of the current project downloads first.</p><p class="dialog-warning">Files that are not in the backup will be removed from this project.</p><div class="dialog-actions"><button type="button" data-cancel>Cancel</button><button type="button" class="primary" data-confirm-restore>Restore and replace</button></div></section>`;
+      const finish = value => { backdrop.remove(); resolve(value); };
+      $("[data-cancel]", backdrop).addEventListener("click", () => finish(false));
+      $("[data-confirm-restore]", backdrop).addEventListener("click", () => finish(true));
+      backdrop.addEventListener("click", event => { if (event.target === backdrop) finish(false); });
+      document.body.append(backdrop);
+      $("[data-cancel]", backdrop).focus();
+    });
   }
 
   async function copyProjectToFolder() {
@@ -2365,12 +2492,47 @@
     });
     renderCharacterBinder(sets.character, paths.filter(path => isEntityPath(path) && worldbuildingType(path) === "character"));
     renderLocationBinder(sets.location, paths.filter(path => isEntityPath(path) && worldbuildingType(path) === "location"));
+    setEntityDropTarget(sets.character, "character", path => setEntityPlacement(path, "_veritasFolderId", ""));
+    setEntityDropTarget(sets.location, "location", path => setEntityPlacement(path, "_veritasParentLocationPath", ""));
     Object.entries(sets).filter(([type]) => type !== "character" && type !== "location").forEach(([type, container]) => {
       if (!container.children.length) container.innerHTML = `<div class="empty-hint">No ${type === "chapter" ? "chapters" : `${type}s`} yet.</div>`;
     });
     if (state.currentView === "manuscript-index" && !$("#lifecycle-view").hidden) {
       renderManuscriptIndex($("#lifecycle-view"));
     }
+  }
+
+  function readDraggedEntity(event) {
+    try {
+      const payload = JSON.parse(event.dataTransfer.getData("application/x-veritas-entity"));
+      if (payload && typeof payload.path === "string" && ["character", "location"].includes(payload.type)) return payload;
+    } catch (error) {
+      console.error("Could not read dragged worldbuilding entry.", error);
+    }
+    return null;
+  }
+
+  function setEntityDropTarget(target, type, onDrop) {
+    if (target.dataset.entityDropType) return;
+    target.dataset.entityDropType = type;
+    target.addEventListener("dragover", event => {
+      if (!event.dataTransfer.types.includes(`application/x-veritas-${type}`)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      target.classList.add("entity-drop-target");
+    });
+    target.addEventListener("dragleave", event => {
+      if (!target.contains(event.relatedTarget)) target.classList.remove("entity-drop-target");
+    });
+    target.addEventListener("drop", event => {
+      target.classList.remove("entity-drop-target");
+      const dragged = readDraggedEntity(event);
+      if (!dragged || dragged.type !== type) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onDrop(dragged.path);
+    });
   }
 
   function createEntityBinderItem(path, depth = 0) {
@@ -2380,6 +2542,34 @@
     item.style.paddingLeft = `${8 + depth * 14}px`;
     const label = entityData(path).Name || basename(path);
     item.innerHTML = `<span class="tree-icon">◇</span><span class="tree-label">${escapeHtml(label)}</span>`;
+    const type = worldbuildingType(path);
+    if (type === "character" || type === "location") {
+      item.draggable = true;
+      item.classList.add("entity-draggable");
+      item.addEventListener("dragstart", event => {
+        event.dataTransfer.setData("application/x-veritas-entity", JSON.stringify({ type, path }));
+        event.dataTransfer.setData(`application/x-veritas-${type}`, "move");
+        event.dataTransfer.effectAllowed = "move";
+        item.classList.add("dragging");
+      });
+      item.addEventListener("dragend", () => item.classList.remove("dragging"));
+    }
+    if (type === "location") {
+      setEntityDropTarget(item, "location", draggedPath => {
+        if (draggedPath === path) return;
+        let ancestor = path;
+        const seen = new Set();
+        while (ancestor && !seen.has(ancestor)) {
+          if (ancestor === draggedPath) {
+            notify("A location cannot be nested inside one of its descendants.");
+            return;
+          }
+          seen.add(ancestor);
+          ancestor = entityData(ancestor)._veritasParentLocationPath;
+        }
+        void setEntityPlacement(draggedPath, "_veritasParentLocationPath", path);
+      });
+    }
     item.addEventListener("click", () => openFile(path));
     item.addEventListener("contextmenu", event => {
       event.preventDefault();
@@ -2397,6 +2587,7 @@
       groupPaths.forEach(path => groupedPaths.add(path));
       const group = document.createElement("div");
       group.className = "character-folder-group";
+      setEntityDropTarget(group, "character", path => setEntityPlacement(path, "_veritasFolderId", folder.id));
       const heading = document.createElement("div");
       heading.className = "character-folder-heading";
       const toggle = document.createElement("button");
@@ -2468,16 +2659,13 @@
     const menu = document.createElement("div");
     menu.className = "context-menu";
     menu.setAttribute("role", "menu");
-    const actions = worldbuildingType(path) === "character"
-      ? '<button type="button" role="menuitem" data-binder-action="move">Move to folder…</button><button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>'
-      : '<button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>';
+    const actions = '<button type="button" role="menuitem" data-binder-action="rename">Rename…</button><button type="button" role="menuitem" data-binder-action="delete">Delete…</button>';
     menu.innerHTML = actions;
     positionContextMenu(menu, x, y);
     menu.addEventListener("click", event => {
       const action = event.target.closest("[data-binder-action]")?.dataset.binderAction;
       menu.remove();
-      if (action === "move") void moveCharacterToFolder(path);
-      else if (action === "rename") void renameBinderFile(path);
+      if (action === "rename") void renameBinderFile(path);
       else if (action === "delete") void deleteBinderFile(path);
     });
     $("button", menu).focus({ preventScroll: true });
@@ -2579,16 +2767,10 @@
     }
   }
 
-  async function moveCharacterToFolder(path) {
-    const folders = characterFolders();
-    const folderId = await selectDialog("Move character", "Choose a folder", [
-      { value: "", label: "Unfiled" },
-      ...folders.map(folder => ({ value: folder.id, label: folder.name }))
-    ], entityData(path)._veritasFolderId || "");
-    if (folderId === null) return;
+  async function setEntityPlacement(path, field, value) {
     const data = entityData(path);
-    if (folderId) data._veritasFolderId = folderId;
-    else delete data._veritasFolderId;
+    if (value) data[field] = value;
+    else delete data[field];
     try {
       const companion = companionPath(path);
       const content = JSON.stringify(data, null, 2);
@@ -2597,8 +2779,8 @@
       persistBrowserState();
       renderBinder();
     } catch (error) {
-      console.error("Could not move character to folder.", error);
-      notify(`Could not move character: ${error.message}`);
+      console.error("Could not update worldbuilding placement.", error);
+      notify(`Could not move entry: ${error.message}`);
     }
   }
 
@@ -2892,56 +3074,6 @@
       label.append(input);
       container.append(label);
     });
-    if (type === "character") {
-      const label = document.createElement("label");
-      label.className = "entity-field";
-      label.innerHTML = "<span>Folder</span>";
-      const select = document.createElement("select");
-      select.setAttribute("aria-label", "Character folder");
-      const unfiled = document.createElement("option");
-      unfiled.value = "";
-      unfiled.textContent = "Unfiled";
-      select.append(unfiled);
-      characterFolders().forEach(folder => {
-        const option = document.createElement("option");
-        option.value = folder.id;
-        option.textContent = folder.name;
-        select.append(option);
-      });
-      select.value = data._veritasFolderId || "";
-      select.addEventListener("change", () => updateEntityField(path, "_veritasFolderId", select.value, "text"));
-      label.append(select);
-      container.append(label);
-    } else if (type === "location") {
-      const label = document.createElement("label");
-      label.className = "entity-field";
-      label.innerHTML = "<span>Parent location</span>";
-      const select = document.createElement("select");
-      select.setAttribute("aria-label", "Parent location");
-      const noParent = document.createElement("option");
-      noParent.value = "";
-      noParent.textContent = "None";
-      select.append(noParent);
-      const locationPaths = [...state.files.keys()].filter(item => isEntityPath(item) && worldbuildingType(item) === "location");
-      locationPaths.forEach(candidate => {
-        if (candidate === path) return;
-        let ancestor = candidate;
-        const seen = new Set();
-        while (ancestor && !seen.has(ancestor)) {
-          if (ancestor === path) return;
-          seen.add(ancestor);
-          ancestor = entityData(ancestor)._veritasParentLocationPath;
-        }
-        const option = document.createElement("option");
-        option.value = candidate;
-        option.textContent = entityData(candidate).Name || basename(candidate);
-        select.append(option);
-      });
-      select.value = data._veritasParentLocationPath || "";
-      select.addEventListener("change", () => updateEntityField(path, "_veritasParentLocationPath", select.value, "text"));
-      label.append(select);
-      container.append(label);
-    }
     container.hidden = false;
   }
 
@@ -4065,13 +4197,13 @@
     else if (action.startsWith("manuscript-")) openExportDialog({ scope: "manuscript" });
   }
 
-  function downloadText(filename, text, mime) {
+  function downloadText(filename, text, mime, message = `${filename} exported`) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([text], { type: mime }));
     link.download = filename;
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    notify(`${filename} exported`);
+    notify(message);
   }
 
   function xmlEscape(value) {
@@ -4352,6 +4484,8 @@
     $("[data-open-find]").addEventListener("mousedown", event => event.preventDefault());
     $("[data-open-find]").addEventListener("click", openFindReplace);
     $("#new-chapter").addEventListener("click", () => newFile("chapter"));
+    $("#new-location").addEventListener("click", () => newFile("location"));
+    $("#new-faction").addEventListener("click", () => newFile("faction"));
     $("#new-lore").addEventListener("click", () => showNewLoreMenu());
     $("#new-lore-inline").addEventListener("click", () => showNewLoreMenu());
     $("#new-character-folder").addEventListener("click", () => void createCharacterFolder());
@@ -4752,18 +4886,20 @@
     const schemas = getSchemas();
     const backdrop = document.createElement("div");
     backdrop.className = "dialog-backdrop schema-backdrop";
-    backdrop.innerHTML = `<section class="dialog-card schema-card"><h3>Entity schema editor</h3><p>Customize structured fields used by worldbuilding templates. Changes are saved in config.json.</p><label class="schema-type-label">Template<select id="schema-type"><option value="character">Character</option><option value="location">Location</option><option value="faction">Faction</option></select></label><div class="schema-fields" id="schema-fields"></div><form class="schema-add-form" id="schema-add-form"><input id="schema-field-name" placeholder="Field name" required><select id="schema-field-type"><option value="text">Text</option><option value="number">Number</option><option value="dropdown">Dropdown</option><option value="long-text">Long text</option></select><input id="schema-field-options" placeholder="Dropdown options, comma separated" hidden><button class="primary" type="submit">Add field</button></form><div class="dialog-actions"><button type="button" data-close-schema>Done</button></div></section>`;
+    backdrop.innerHTML = `<section class="dialog-card schema-card"><h3>Entity schema editor</h3><p>Customize structured fields used by worldbuilding templates. Drag fields or use the move buttons to change their order. Changes are saved in config.json.</p><label class="schema-type-label">Template<select id="schema-type"><option value="character">Character</option><option value="location">Location</option><option value="faction">Faction</option></select></label><div class="schema-fields" id="schema-fields"></div><form class="schema-add-form" id="schema-add-form"><input id="schema-field-name" placeholder="Field name" required><select id="schema-field-type"><option value="text">Text</option><option value="number">Number</option><option value="dropdown">Dropdown</option><option value="long-text">Long text</option></select><input id="schema-field-options" placeholder="Dropdown options, comma separated" hidden><button class="primary" type="submit">Add field</button></form><div class="dialog-actions"><button type="button" data-close-schema>Done</button></div></section>`;
     const typeSelect = $("#schema-type", backdrop);
     const fieldList = $("#schema-fields", backdrop);
     const addForm = $("#schema-add-form", backdrop);
     const fieldType = $("#schema-field-type", backdrop);
     const optionsInput = $("#schema-field-options", backdrop);
+    let draggedFieldIndex = null;
     const renderFields = () => {
       fieldList.replaceChildren();
       (schemas[typeSelect.value] || []).forEach((field, index) => {
         const row = document.createElement("div");
         row.className = "schema-field-row";
-        row.innerHTML = `<span>${escapeHtml(field.name)}</span><small>${escapeHtml(field.type)}${field.type === "dropdown" ? ` · ${escapeHtml((field.options || []).join(", "))}` : ""}</small>${field.name.toLowerCase() === "name" ? "<small>Required</small>" : `<button type="button" aria-label="Remove ${escapeHtml(field.name)}" data-remove-field="${index}">×</button>`}`;
+        row.dataset.fieldIndex = index;
+        row.innerHTML = `<button type="button" class="schema-drag-handle" draggable="true" data-drag-field="${index}" aria-label="Drag to reorder ${escapeHtml(field.name)}" title="Drag to reorder">⠿</button><span>${escapeHtml(field.name)}</span><small>${escapeHtml(field.type)}${field.type === "dropdown" ? ` · ${escapeHtml((field.options || []).join(", "))}` : ""}</small><span class="schema-field-move"><button type="button" data-move-field="${index}" data-direction="-1" aria-label="Move ${escapeHtml(field.name)} up"${index === 0 ? " disabled" : ""}>↑</button><button type="button" data-move-field="${index}" data-direction="1" aria-label="Move ${escapeHtml(field.name)} down"${index === schemas[typeSelect.value].length - 1 ? " disabled" : ""}>↓</button></span>${field.name.toLowerCase() === "name" ? "<small>Required</small>" : `<button type="button" aria-label="Remove ${escapeHtml(field.name)}" data-remove-field="${index}">×</button>`}`;
         fieldList.append(row);
       });
     };
@@ -4783,15 +4919,63 @@
         notify(`Could not save templates: ${error.message}`);
       }
     };
+    const moveField = (from, to) => {
+      const fields = schemas[typeSelect.value];
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= fields.length || to >= fields.length || from === to) return;
+      const [field] = fields.splice(from, 1);
+      fields.splice(to, 0, field);
+      renderFields();
+      void persistSchemas();
+    };
     typeSelect.addEventListener("change", renderFields);
     fieldType.addEventListener("change", () => { optionsInput.hidden = fieldType.value !== "dropdown"; });
     fieldList.addEventListener("click", event => {
+      const moveButton = event.target.closest("[data-move-field]");
+      if (moveButton) {
+        moveField(Number(moveButton.dataset.moveField), Number(moveButton.dataset.moveField) + Number(moveButton.dataset.direction));
+        return;
+      }
       const button = event.target.closest("[data-remove-field]");
       if (!button) return;
       if (schemas[typeSelect.value][Number(button.dataset.removeField)]?.name.toLowerCase() === "name") return;
       schemas[typeSelect.value].splice(Number(button.dataset.removeField), 1);
       renderFields();
       void persistSchemas();
+    });
+    fieldList.addEventListener("dragstart", event => {
+      const handle = event.target.closest("[data-drag-field]");
+      if (!handle) return;
+      const row = handle.closest(".schema-field-row");
+      draggedFieldIndex = Number(handle.dataset.dragField);
+      row.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+    });
+    fieldList.addEventListener("dragend", () => {
+      draggedFieldIndex = null;
+      $$(".schema-field-row", fieldList).forEach(row => row.classList.remove("dragging", "drag-over-before", "drag-over-after"));
+    });
+    fieldList.addEventListener("dragover", event => {
+      const row = event.target.closest(".schema-field-row");
+      if (!row || draggedFieldIndex === null) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const dropAfter = event.clientY >= row.getBoundingClientRect().top + row.offsetHeight / 2;
+      $$(".schema-field-row", fieldList).forEach(item => {
+        item.classList.remove("drag-over-before", "drag-over-after");
+        if (item === row) item.classList.add(dropAfter ? "drag-over-after" : "drag-over-before");
+      });
+    });
+    fieldList.addEventListener("drop", event => {
+      const row = event.target.closest(".schema-field-row");
+      if (!row || draggedFieldIndex === null) return;
+      event.preventDefault();
+      const targetIndex = Number(row.dataset.fieldIndex);
+      const dropAfter = event.clientY >= row.getBoundingClientRect().top + row.offsetHeight / 2;
+      const insertionIndex = targetIndex + Number(dropAfter);
+      const destinationIndex = draggedFieldIndex < insertionIndex ? insertionIndex - 1 : insertionIndex;
+      const sourceIndex = draggedFieldIndex;
+      draggedFieldIndex = null;
+      moveField(sourceIndex, destinationIndex);
     });
     addForm.addEventListener("submit", event => {
       event.preventDefault();

@@ -83,7 +83,7 @@ Turn on only the parts of the process you need:
 - Choose Markdown, DOCX, or print-to-PDF
 - Configure title pages and chapter page breaks
 - DOCX exports include Word-managed page numbers; full-manuscript exports can include an updateable table of contents with real page numbers. Word calculates pagination when the document opens; browser print-to-PDF pagination may differ.
-- Export and import a complete project archive
+- Back up and import a complete project archive
 - Keep a simple project-scoped to-do list close at hand
 
 </td>
@@ -125,7 +125,7 @@ Veritas stores manuscript content as Markdown and project details as JSON. Choos
 
 - **Browser vault:** stored locally in your browser.
 - **Folder-backed project:** files are read and written directly in a folder you choose.
-- **Project archive:** export a `.veritas.json` archive, then import it on another device.
+- **Project archive:** back up a `.veritas.json` archive, then import it on another device.
 
 ### Keep a project in Git
 
