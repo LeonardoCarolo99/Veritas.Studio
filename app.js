@@ -2480,7 +2480,7 @@
       else if (action === "rename") void renameBinderFile(path);
       else if (action === "delete") void deleteBinderFile(path);
     });
-    $("button", menu).focus();
+    $("button", menu).focus({ preventScroll: true });
     setTimeout(() => document.addEventListener("click", function dismiss(event) {
       if (!menu.isConnected || !menu.contains(event.target)) {
         menu.remove();
@@ -2502,7 +2502,7 @@
       if (action === "rename") void renameCharacterFolder(folder);
       else if (action === "delete") void deleteCharacterFolder(folder);
     });
-    $("button", menu).focus();
+    $("button", menu).focus({ preventScroll: true });
     setTimeout(() => document.addEventListener("click", function dismiss(event) {
       if (!menu.isConnected || !menu.contains(event.target)) {
         menu.remove();
@@ -2646,7 +2646,7 @@
         runEditorCommand(action, button.dataset.commandValue ? `<${button.dataset.commandValue}>` : "");
       }
     });
-    $("button", menu).focus();
+    $("button", menu).focus({ preventScroll: true });
     setTimeout(() => document.addEventListener("click", function dismiss(event) {
       if (!menu.isConnected || !menu.contains(event.target)) {
         menu.remove();
@@ -2656,12 +2656,15 @@
   }
 
   function positionContextMenu(menu, x, y) {
-    menu.style.left = `${Math.max(8, x)}px`;
-    menu.style.top = `${Math.max(8, y)}px`;
+    const scale = state.preferences.uiScale || 1;
+    menu.style.maxHeight = `${Math.min(300, window.innerHeight - 16) / scale}px`;
+    menu.style.left = `${x / scale}px`;
+    menu.style.top = `${y / scale}px`;
     document.body.append(menu);
     const rect = menu.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - rect.height - 8))}px`;
+    const top = y + rect.height > window.innerHeight - 8 ? y - rect.height : y;
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)) / scale}px`;
+    menu.style.top = `${Math.max(8, Math.min(top, window.innerHeight - rect.height - 8)) / scale}px`;
   }
 
   async function pasteIntoEditor() {
@@ -4715,12 +4718,21 @@
     $(".menu-popover")?.remove();
     const button = $("#new-menu");
     const rect = button.getBoundingClientRect();
+    const scale = state.preferences.uiScale || 1;
     const menu = document.createElement("div");
     menu.className = "menu-popover";
-    menu.style.top = `${rect.bottom + 5}px`;
+    menu.style.top = `${(rect.bottom + 5) / scale}px`;
     menu.style.right = "auto";
-    menu.style.left = `${Math.min(rect.left, window.innerWidth - 175)}px`;
+    menu.style.left = `${rect.left / scale}px`;
     menu.innerHTML = '<button data-create="character">New character</button><button data-create="location">New location</button><button data-create="faction">New faction</button><button data-create="chapter">New chapter</button><button data-create="timeline">New timeline</button>';
+    document.body.append(menu);
+    const menuRect = menu.getBoundingClientRect();
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuRect.width - 8));
+    const top = rect.bottom + menuRect.height + 13 > window.innerHeight
+      ? Math.max(8, rect.top - menuRect.height - 5)
+      : rect.bottom + 5;
+    menu.style.left = `${left / scale}px`;
+    menu.style.top = `${top / scale}px`;
     menu.addEventListener("click", event => {
       const type = event.target.closest("[data-create]")?.dataset.create;
       menu.remove();

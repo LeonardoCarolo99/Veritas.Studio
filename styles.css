@@ -219,16 +219,18 @@ h2 { font-size: 15px; line-height: 1; margin: 5px 0 0; font-weight: 600; }
 .add-glyph::after { transform: translate(-50%,-50%) rotate(90deg); }
 .binder-add-button:hover .add-glyph,.text-button:hover .add-glyph,.text-button:focus-visible .add-glyph { color: var(--green); transform: scale(1.12); }
 .binder-scroll,.inspector-scroll { overflow: auto; flex: 1; scrollbar-color: #444850 transparent; scrollbar-width: thin; }
-.tree-heading { display: flex; align-items: center; justify-content: space-between; padding: 15px 16px 7px; font-size: 10px; }
+.tree-heading { display: flex; align-items: center; justify-content: space-between; padding: 15px 12px 7px 16px; font-size: 10px; }
 .worldbuilding-heading { border-top: 1px solid #2c3036; margin-top: 5px; padding-top: 14px; }
-.tree-disclosure { display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.tree-disclosure { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.tree-disclosure > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-disclosure:hover { color: var(--text); }
 .tree-chevron { width: 12px; height: 12px; flex: 0 0 12px; display: grid; place-items: center; color: #7d828c; }
 .tree-chevron::before { content: ""; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-1px) rotate(45deg); transition: transform 140ms ease; }
 .tree-disclosure:hover .tree-chevron { color: var(--accent-bright); }
 .tree-disclosure[aria-expanded="false"] .tree-chevron::before { transform: translateY(-1px) rotate(-45deg); }
-.tree-subheading { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px 4px 16px; color: #747a85; font: 500 9px var(--mono); letter-spacing: .8px; }
-.tree-subheading-divider { margin: 3px 12px 0; padding: 10px 4px 4px; border-top: 1px solid color-mix(in srgb,var(--line) 76%,var(--green) 24%); }
+.tree-subheading { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px 4px 16px; color: #747a85; font: 500 9px var(--mono); letter-spacing: .8px; }
+.tree-subheading-divider { margin: 3px 12px 0; padding: 10px 0 4px; border-top: 1px solid color-mix(in srgb,var(--line) 76%,var(--green) 24%); }
+.tree-heading > .text-button,.tree-subheading > .text-button { margin-left: auto; }
 .tree-subheading .tree-disclosure { color: #747a85; }
 .tree-subheading .tree-chevron { width: 10px; height: 10px; flex-basis: 10px; }
 .tree-subheading .tree-chevron::before { width: 4px; height: 4px; }
@@ -431,10 +433,10 @@ body[data-editor-width="wide"] { --editor-max-width: 100%; }
 .search-result { width: 100%; display: flex; gap: 10px; text-align: left; background: transparent; border: 0; color: #c8c9cc; padding: 10px; border-radius: 5px; }
 .search-result:hover { background: #30333a; }
 .search-result small { margin-left: auto; color: var(--muted); }
-.menu-popover { position: fixed; z-index: 15; top: 48px; right: 22px; background: #25282e; border: 1px solid #41454d; border-radius: 6px; padding: 5px; min-width: 145px; box-shadow: 0 10px 30px #0008; }
+.menu-popover { position: fixed; z-index: 15; top: 48px; right: 22px; width: 180px; background: #25282e; border: 1px solid #41454d; border-radius: 6px; padding: 5px; min-width: 145px; box-shadow: 0 10px 30px #0008; }
 .menu-popover button { width: 100%; border: 0; background: transparent; color: #d1d2d2; text-align: left; border-radius: 4px; padding: 9px; font-size: 12px; }
 .menu-popover button:hover { background: #343840; }
-.context-menu { position: fixed; z-index: 28; min-width: 205px; max-width: min(260px,calc(100vw - 16px)); padding: 5px; border: 1px solid #41454d; border-radius: 6px; background: #25282e; box-shadow: 0 10px 30px #0008; }
+.context-menu { position: fixed; z-index: 28; min-width: 205px; max-width: min(260px,calc(100vw - 16px)); padding: 5px; border: 1px solid #41454d; border-radius: 6px; background: #25282e; box-shadow: 0 10px 30px #0008; overflow-y: auto; }
 .context-menu button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 20px; border: 0; border-radius: 4px; padding: 8px 9px; background: transparent; color: #d1d2d2; text-align: left; font: 12px var(--sans); cursor: pointer; }
 .context-menu button:hover,.context-menu button:focus-visible { background: #343840; outline: none; }
 .context-menu kbd { color: #858b96; font: 10px var(--mono); white-space: nowrap; }
