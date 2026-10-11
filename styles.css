@@ -299,6 +299,9 @@ body[data-editor-width="wide"] { --editor-max-width: 100%; }
 .document-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .document-type { color: var(--accent); font-size: 10px; }
 .document-date { font: 10px var(--mono); color: #777d87; }
+.chapter-surface .editor-breadcrumb,
+.chapter-surface .document-heading,
+.chapter-surface .title-input { display: none !important; }
 .title-input { border: 0; outline: 0; padding: 0; color: #e8e3d9; font: 600 calc(clamp(25px, 3vw, 34px) * var(--editor-zoom, 1))/1.25 var(--serif); letter-spacing: -.5px; background: transparent; width: 100%; margin: 0 0 18px; }
 .entity-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 12px; margin: 0 0 17px; padding: 12px; background: #23262b; border: 1px solid #343840; border-radius: 6px; max-height: 190px; overflow: auto; }
 .entity-fields[hidden] { display: none; }

@@ -251,6 +251,24 @@
     return basename(path).replace(/^\d+\s*-\s*/, "");
   }
 
+  function chapterHeading(path) {
+    const content = String(state.files.get(path) || "");
+    const match = content.match(/^#\s+(.+?)\s*$/m);
+    return match ? match[1].replace(/[*_`]/g, "").trim() : "";
+  }
+
+  function updateChapterSurface(path) {
+    const isChapter = Boolean(path) && path.toLowerCase().endsWith(".md") && category(path) === "chapter";
+    document.body.classList.toggle("chapter-surface", isChapter);
+    return isChapter;
+  }
+
+  function syncChapterTitle() {
+    if (!document.body.classList.contains("chapter-surface")) return;
+    const heading = ($("#document-content").value.match(/^#\s+(.+?)\s*$/m)?.[1] || "").replace(/[*_`]/g, "").trim();
+    if (heading) $("#document-title").value = heading;
+  }
+
   function category(path) {
     if (path.endsWith(".json")) path = path.slice(0, -5) + ".md";
     if (path.startsWith("Manuscript/")) return "chapter";
@@ -533,6 +551,7 @@
   function setCenterSurface(surface) {
     const dictionary = surface === "dictionary";
     document.body.classList.toggle("dictionary-surface", dictionary);
+    if (dictionary) updateChapterSurface("");
     $("#editor-layout").hidden = dictionary;
     $("#breadcrumb").hidden = dictionary;
     $("#dictionary-view").hidden = !dictionary;
@@ -543,6 +562,7 @@
     state.currentView = "editor";
     state.tabs = state.tabs.filter(tab => isDictionaryTab(tab) || moduleForPath(tab) !== state.currentModule);
     setCenterSurface("editor");
+    updateChapterSurface("");
     $("#document-title").value = "";
     $("#document-content").value = "";
     $("#rich-document-content").innerHTML = "";
@@ -3218,7 +3238,8 @@
     const isEntity = isEntityPath(path);
     const isJson = path.toLowerCase().endsWith(".json");
     const data = isEntity ? entityData(path) : null;
-    $("#document-title").value = data?.Name || basename(path);
+    const isChapter = updateChapterSurface(path);
+    $("#document-title").value = data?.Name || (isChapter ? chapterHeading(path) || basename(path) : basename(path));
     $("#document-title").disabled = isJson;
     $("#document-title").hidden = isEntity || isJson;
     $("#entity-fields").hidden = !isEntity;
@@ -3348,9 +3369,10 @@
   }
 
   function currentText() {
-    const title = $("#document-title").value.trim();
     const content = editorBodyText();
     if (state.activePath.toLowerCase().endsWith(".json")) return content;
+    if (category(state.activePath) === "chapter") return content;
+    const title = $("#document-title").value.trim();
     return title ? `# ${title}\n\n${content.replace(/^#\s+[^\n]+\n*/, "").trimStart()}` : content;
   }
 
@@ -3366,9 +3388,9 @@
       .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/gi, '<a href="$2">$1</a>');
   }
 
-  function markdownEditorHtml(markdown) {
+  function markdownEditorHtml(markdown, keepTitle = false) {
     const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
-    if (/^#\s+/.test(lines[0] || "")) {
+    if (!keepTitle && /^#\s+/.test(lines[0] || "")) {
       lines.shift();
       if (lines[0] === "") lines.shift();
     }
@@ -3411,7 +3433,8 @@
 
   function renderMarkdownEditor(markdown) {
     const editor = $("#rich-document-content");
-    editor.innerHTML = markdownEditorHtml(markdown);
+    const keepTitle = category(state.activePath) === "chapter";
+    editor.innerHTML = markdownEditorHtml(markdown, keepTitle);
     state.editorSelection = null;
     if (editor.classList.contains("manuscript-pages")) requestAnimationFrame(() => paginateManuscriptEditor(editor));
   }
@@ -4561,6 +4584,7 @@
     });
     $("#rich-document-content").addEventListener("input", () => {
       syncRichEditor();
+      syncChapterTitle();
       markDirty();
       if ($("#rich-document-content").classList.contains("manuscript-pages")) {
         requestAnimationFrame(() => paginateManuscriptEditor());
