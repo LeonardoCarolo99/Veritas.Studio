@@ -21,6 +21,7 @@
           <span class="project-chevron" aria-hidden="true"></span>
         </button>
         <nav class="module-nav" id="module-nav" aria-label="Active project modules"></nav>
+        <div class="dev-nav" id="dev-nav" role="group" aria-label="Development tools"></div>
         <div class="top-actions">
           <button class="icon-button search-button" id="search-toggle" title="Search vault" aria-label="Search">
             <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.2"></circle><path d="m15.4 15.4 4.2 4.2"></path></svg>
@@ -73,6 +74,11 @@
           <section class="panel editor-panel" data-panel="editor">
             <div class="editor-topline">
               <div class="tabs" id="tabs"></div>
+              <div class="chapter-switcher" id="chapter-switcher" hidden>
+                <select id="chapter-switcher-select" aria-label="Switch chapter"></select>
+                <button class="text-button" id="chapter-switcher-new" type="button" title="New chapter" aria-label="New chapter"><span class="add-glyph" aria-hidden="true"></span></button>
+                <button class="icon-button small" id="chapter-switcher-index" type="button" title="Manuscript index" aria-label="Manuscript index">☷</button>
+              </div>
               <div class="editor-actions">
                 <div class="editor-zoom-controls" role="group" aria-label="Manuscript zoom">
                   <button class="icon-button small" id="editor-zoom-out" type="button" title="Zoom manuscript out" aria-label="Zoom manuscript out">−</button>
@@ -140,6 +146,7 @@
                 <textarea id="split-content" class="markdown-editor split-editor" aria-label="Second editor" spellcheck="true"></textarea>
               </div>
             </div>
+            <div class="dictionary-view" id="dictionary-view" hidden></div>
           </section>
           <section class="panel lifecycle-view" id="lifecycle-view" hidden></section>
         </main>

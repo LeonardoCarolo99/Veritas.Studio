@@ -7,16 +7,23 @@
   const PROJECTS_KEY = "veritas-studio-projects";
   const PROJECT_DATA_PREFIX = "veritas-studio-project:";
   const DICTIONARY_PATH = "Worldbuilding/Dictionary/dictionary.json";
+  const DICTIONARY_TAB = "@dictionary";
   const BINDER_COLLAPSE_KEY = "veritas-studio-binder-collapse";
   const INSPECTOR_COLLAPSE_KEY = "veritas-studio-inspector-collapse";
   const desktop = window.veritasDesktop;
   if (desktop) document.documentElement.classList.add("desktop-app");
   const MODULES = [
     { id: "ideation", name: "Ideation", description: "Brainstorming, loglines, and conceptual notes", icon: "✧" },
-    { id: "writing", name: "Writing", description: "Manuscript, editor, entities, and plot planner", icon: "✎" },
+    { id: "plotting", name: "Plotting", description: "Project binder, worldbuilding, timelines, and plot planner", icon: "◈" },
+    { id: "writing", name: "Writing", description: "Manuscript drafting with the editor and inspector", icon: "✎" },
     { id: "editing", name: "Editing", description: "Versions, revision checklists, and editorial notes", icon: "◷" },
     { id: "publishing", name: "Publishing", description: "Marketing plans, launch checklist, and export", icon: "↗" }
   ];
+  const MODULE_LAYOUT = {
+    writing: { binder: false, inspector: true },
+    plotting: { binder: true, inspector: false }
+  };
+  const LIFECYCLE_VIEWS = ["manuscript-index", "planner", "todo", "search"];
   const PREFERENCES_KEY = "veritas-studio-preferences";
   const DEFAULT_GOAL = 500;
   const UI_SCALE_MIN = 1.3;
@@ -71,6 +78,8 @@
     projects: [],
     currentModule: "writing",
     currentView: "editor",
+    moduleMemory: { writing: "", plotting: "" },
+    collapsed: { left: false, right: false },
     plotLayer: "surface",
     plotThread: "all",
     publishingTab: "overview",
@@ -107,7 +116,7 @@
     { path: "Ideation/ideas.json", content: JSON.stringify({ logline: "Tutorial: Summarize the protagonist, their goal, and the main obstacle in one or two sentences.", premise: "Tutorial: Use this space to explore the central question, stakes, and promise of your story.", notes: "Tutorial: Capture loose questions and possibilities here. Use Brainstorm to arrange idea cards on a canvas, or Moodboard to collect image references.", cards: [], moodboard: [] }, null, 2) },
     { path: "Editing/revisions.json", content: JSON.stringify({ snapshots: [], checklist: [{ text: "Tutorial: Save a version snapshot before making a substantial revision.", done: false }, { text: "Tutorial: Analyze a chapter to review proofreading and style suggestions.", done: false }, { text: "Tutorial: Add focused checklist passes, such as checking character motivations or continuity.", done: false }] }, null, 2) },
     { path: "Publishing/launch.json", content: JSON.stringify({ plan: "Tutorial: Use this space to plan your audience, comparable titles, promotion channels, and launch approach.", bio: "Tutorial: Add a short author bio for retailer pages, press, and event organizers.", checklist: [{ text: "Tutorial: Add a book in Book details to track its metadata.", done: false }, { text: "Tutorial: Draft the pitch and blurb under Marketing copy.", done: false }, { text: "Tutorial: Record expenses and earnings under Finances.", done: false }] }, null, 2) },
-    { path: "config.json", content: JSON.stringify({ name: "Veritas Studio Tutorial", dailyWordGoal: 500, version: 1, modules: { ideation: false, writing: true, editing: false, publishing: false } }, null, 2) }
+    { path: "config.json", content: JSON.stringify({ name: "Veritas Studio Tutorial", dailyWordGoal: 500, version: 1, modules: { ideation: false, plotting: false, writing: true, editing: false, publishing: false } }, null, 2) }
   ];
   const starterNotes = {
     "Manuscript/02 - Chapter notes.md": "These notes belong only to this chapter. They are stored separately from the manuscript text and are not included in exports. Select another chapter to see its own notes."
@@ -457,7 +466,7 @@
         const legacy = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
         const id = `project-${crypto.randomUUID()}`;
         const name = legacy?.name || "Veritas Studio Tutorial";
-        state.projects = [{ id, name, storage: "browser", modules: { ideation: false, writing: true, editing: false, publishing: false } }];
+        state.projects = [{ id, name, storage: "browser", modules: { ideation: false, plotting: false, writing: true, editing: false, publishing: false } }];
         state.projectId = id;
         if (legacy?.files?.length) localStorage.setItem(`${PROJECT_DATA_PREFIX}${id}`, JSON.stringify(legacy));
         else localStorage.setItem(`${PROJECT_DATA_PREFIX}${id}`, JSON.stringify({
@@ -473,7 +482,7 @@
       state.files = new Map(starterFiles.map(file => [file.path, file.content]));
       state.manuscriptNotes = { ...starterNotes };
       state.projectId = "recovery";
-      state.projects = [{ id: state.projectId, name: "Recovery workspace", storage: "browser", modules: { writing: true } }];
+      state.projects = [{ id: state.projectId, name: "Recovery workspace", storage: "browser", modules: { plotting: false, writing: true } }];
       renderAll();
       notify("Could not load projects; opened a recovery workspace.");
     }
@@ -496,7 +505,7 @@
     let projectConfig = {};
     try { projectConfig = JSON.parse(state.files.get("config.json") || "{}"); }
     catch (error) { console.error("Could not parse project config.json.", error); notify("Project settings could not be loaded; using stored module settings."); }
-    if (projectConfig.modules) project.modules = { ideation: false, writing: true, editing: false, publishing: false, ...project.modules, ...projectConfig.modules };
+    if (projectConfig.modules) project.modules = { ideation: false, plotting: false, writing: true, editing: false, publishing: false, ...project.modules, ...projectConfig.modules };
     if (!project.modules?.[state.currentModule]) state.currentModule = MODULES.find(module => project.modules?.[module.id])?.id || "writing";
     state.dailyGoal = Number(saved?.dailyGoal) || Number(projectConfig.dailyWordGoal) || DEFAULT_GOAL;
     state.projectWordGoal = Number.isInteger(projectConfig.projectWordGoal) && projectConfig.projectWordGoal > 0
@@ -521,19 +530,43 @@
     else showModule("ideation");
   }
 
-  function showEmptyEditor() {
+  function setCenterSurface(surface) {
+    const dictionary = surface === "dictionary";
+    document.body.classList.toggle("dictionary-surface", dictionary);
+    $("#editor-layout").hidden = dictionary;
+    $("#breadcrumb").hidden = dictionary;
+    $("#dictionary-view").hidden = !dictionary;
+  }
+
+  function clearEditor() {
     state.activePath = "";
-    state.tabs = [];
+    state.currentView = "editor";
+    state.tabs = state.tabs.filter(tab => isDictionaryTab(tab) || moduleForPath(tab) !== state.currentModule);
+    setCenterSurface("editor");
     $("#document-title").value = "";
     $("#document-content").value = "";
     $("#rich-document-content").innerHTML = "";
     $("#rich-document-content").hidden = false;
     $("#document-content").hidden = true;
+    $("#entity-fields").hidden = true;
+    $("#entity-fields").replaceChildren();
     renderChapterNotes();
-    $("#breadcrumb").textContent = "New project";
+    $("#breadcrumb").textContent = state.currentModule === "plotting" ? "Project binder" : "New project";
     renderTabs();
     updateStats();
-    showModule("writing");
+    updateChapterSwitcher();
+  }
+
+  function showEmptyEditor() {
+    if (!activeProject()?.modules?.writing) return;
+    state.currentModule = "writing";
+    state.currentView = "editor";
+    $("#lifecycle-view").hidden = true;
+    $("[data-panel=editor]").hidden = false;
+    clearEditor();
+    renderModuleNavigation();
+    renderBinder();
+    applyModuleVisibility();
   }
 
   function persistProjectCatalog() {
@@ -550,15 +583,55 @@
     $("#project-name").textContent = name;
   }
 
+  function moduleOfPath(path) {
+    if (!path) return "";
+    const type = category(path);
+    if (type === "chapter") return "writing";
+    if (type === "lore" || type === "timeline") return "plotting";
+    return "";
+  }
+
+  function moduleForPath(path) {
+    const modules = activeProject()?.modules || {};
+    const docModule = moduleOfPath(path);
+    if (docModule && modules[docModule]) return docModule;
+    if (docModule === "writing") return "";
+    return modules.writing ? "writing" : "";
+  }
+
+  function isDictionaryTab(tab) {
+    return tab === DICTIONARY_TAB;
+  }
+
+  function fileTabs() {
+    return state.tabs.filter(tab => !isDictionaryTab(tab));
+  }
+
+  function firstPathForModule(moduleId) {
+    return [...state.files.keys()].find(path => moduleOfPath(path) === moduleId);
+  }
+
+  function openModuleEditor(moduleId) {
+    if (moduleForPath(state.activePath) === moduleId) { updateChapterSwitcher(); return; }
+    const remembered = state.moduleMemory?.[moduleId];
+    const target = (remembered && state.files.has(remembered) && moduleForPath(remembered) === moduleId)
+      ? remembered
+      : firstPathForModule(moduleId);
+    if (target) openFile(target);
+    else clearEditor();
+  }
+
   function renderModuleNavigation() {
     const container = $("#module-nav");
     if (!container) return;
     container.replaceChildren();
     const modules = activeProject()?.modules || {};
     MODULES.filter(module => modules[module.id]).forEach(module => {
-      const button = document.createElement("button");
       const moduleActive = state.currentModule === module.id
-        && (state.currentView === "editor" || (module.id === "writing" && ["dictionary", "manuscript-index"].includes(state.currentView)));
+        && (state.currentView === "editor"
+          || (module.id === "writing" && state.currentView === "manuscript-index")
+          || (module.id === "plotting" && ["dictionary", "planner"].includes(state.currentView)));
+      const button = document.createElement("button");
       button.className = `module-nav-item${moduleActive ? " active" : ""}`;
       button.type = "button";
       button.setAttribute("aria-pressed", String(moduleActive));
@@ -566,16 +639,18 @@
       button.addEventListener("click", () => showModule(module.id));
       container.append(button);
     });
-    if (modules.writing) container.classList.toggle("has-writing-module", true);
-    else container.classList.remove("has-writing-module");
-    const todo = document.createElement("button");
-    todo.className = `module-nav-item${state.currentView === "todo" ? " active" : ""}`;
-    todo.type = "button";
-    todo.setAttribute("aria-pressed", String(state.currentView === "todo"));
-    todo.innerHTML = "<span>☑</span>To-do";
-    todo.addEventListener("click", openTodoView);
-    container.append(todo);
-    if (modules.writing) {
+    const devNav = $("#dev-nav");
+    if (devNav) {
+      const todo = document.createElement("button");
+      todo.className = `module-nav-item dev-nav-item${state.currentView === "todo" ? " active" : ""}`;
+      todo.type = "button";
+      todo.setAttribute("aria-pressed", String(state.currentView === "todo"));
+      todo.title = "To-do (development tool)";
+      todo.innerHTML = "<span>☑</span>To-do";
+      todo.addEventListener("click", openTodoView);
+      devNav.replaceChildren(todo);
+    }
+    if (modules.plotting) {
       const planner = document.createElement("button");
       planner.className = `module-nav-item planner-nav-item${state.currentView === "planner" ? " active" : ""}`;
       planner.type = "button";
@@ -598,16 +673,24 @@
     renderModuleNavigation();
     const lifecycle = $("#lifecycle-view");
     lifecycle.classList.remove("manuscript-index-view");
-    const writing = moduleId === "writing";
-    lifecycle.hidden = writing;
-    $("[data-panel=editor]").hidden = !writing;
-    if (!writing) renderLifecycleModule(moduleId, lifecycle);
+    const editorModule = ["writing", "plotting"].includes(moduleId);
+    lifecycle.hidden = editorModule;
+    $("[data-panel=editor]").hidden = !editorModule;
+    if (editorModule) {
+      setCenterSurface("editor");
+      openModuleEditor(moduleId);
+    } else renderLifecycleModule(moduleId, lifecycle);
     applyModuleVisibility();
+    renderTabs();
+    renderBinder();
   }
 
   function openPlotPlannerView() {
-    if (!activeProject()?.modules?.writing) return;
-    state.currentModule = "writing";
+    if (!activeProject()?.modules?.plotting) {
+      notify("Enable the Plotting module in Project settings to use the plot planner.");
+      return;
+    }
+    state.currentModule = "plotting";
     state.currentView = "planner";
     renderModuleNavigation();
     const lifecycle = $("#lifecycle-view");
@@ -630,20 +713,27 @@
   }
 
   async function openDictionaryView() {
+    if (!activeProject()?.modules?.plotting) {
+      notify("Enable the Plotting module in Project settings to use the dictionary.");
+      return;
+    }
     if (state.dirty) {
       clearTimeout(state.saveTimer);
       await saveActiveFile();
       if (state.dirty) return;
     }
+    if (!state.tabs.includes(DICTIONARY_TAB)) state.tabs.push(DICTIONARY_TAB);
+    state.currentModule = "plotting";
     state.currentView = "dictionary";
     renderModuleNavigation();
     renderBinder();
-    const lifecycle = $("#lifecycle-view");
-    lifecycle.classList.remove("manuscript-index-view");
-    lifecycle.hidden = false;
-    $("[data-panel=editor]").hidden = true;
-    renderDictionaryView(lifecycle);
+    $("#lifecycle-view").hidden = true;
+    $("[data-panel=editor]").hidden = false;
+    setCenterSurface("dictionary");
+    renderDictionaryView($("#dictionary-view"));
     applyModuleVisibility();
+    updateChapterSwitcher();
+    renderTabs();
   }
 
   async function openManuscriptIndex() {
@@ -758,7 +848,7 @@
       ideation: renderIdeationModule,
       editing: renderEditingModule,
       publishing: renderPublishingModule,
-      writing: renderPlotPlanner
+      plotting: renderPlotPlanner
     };
     modules[moduleId]?.(container);
   }
@@ -1850,6 +1940,7 @@
     renderTimeline();
     renderRelatedLore();
     renderModuleNavigation();
+    updateChapterSwitcher();
     applyModuleVisibility();
   }
 
@@ -1874,9 +1965,18 @@
   }
 
   function applyModuleVisibility() {
-    const writingWorkspaceView = ["editor", "dictionary", "manuscript-index"].includes(state.currentView);
-    const focused = state.currentModule !== "writing" || !writingWorkspaceView;
-    document.body.classList.toggle("module-focus", focused);
+    const layout = MODULE_LAYOUT[state.currentModule];
+    const fullFocus = !layout || LIFECYCLE_VIEWS.includes(state.currentView);
+    document.body.classList.toggle("module-focus", fullFocus);
+    document.body.classList.toggle("module-plotting", state.currentModule === "plotting" && !fullFocus);
+    document.body.classList.toggle("dictionary-surface", state.currentView === "dictionary");
+    document.body.classList.toggle("left-hidden", fullFocus || !layout.binder || state.collapsed.left);
+    document.body.classList.toggle("right-hidden", fullFocus || !layout.inspector || state.collapsed.right);
+    $$("[data-collapse]").forEach(button => {
+      const side = button.dataset.collapse;
+      const forced = fullFocus || (side === "left" ? !layout?.binder : !layout?.inspector);
+      button.hidden = Boolean(forced);
+    });
   }
 
   function openProjectManager() {
@@ -2273,7 +2373,7 @@
   async function createProject(useFolder) {
     const name = await promptDialog("Create a project", "Project name");
     if (!name) return;
-    const project = { id: `project-${crypto.randomUUID()}`, name, storage: "browser", modules: { ideation: false, writing: true, editing: false, publishing: false } };
+    const project = { id: `project-${crypto.randomUUID()}`, name, storage: "browser", modules: { ideation: false, plotting: false, writing: true, editing: false, publishing: false } };
     if (useFolder && (desktop || window.showDirectoryPicker)) {
       try {
         const safeName = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/g, "").trim() || "Untitled Project";
@@ -2387,7 +2487,7 @@
     let projectConfig = {};
     try { projectConfig = JSON.parse(state.files.get("config.json") || "{}"); }
     catch (error) { console.error("Could not parse project config.json.", error); notify("Project settings could not be loaded; using stored settings."); }
-    if (projectConfig.modules) project.modules = { ideation: false, writing: true, editing: false, publishing: false, ...project.modules, ...projectConfig.modules };
+    if (projectConfig.modules) project.modules = { ideation: false, plotting: false, writing: true, editing: false, publishing: false, ...project.modules, ...projectConfig.modules };
     if (!project.modules?.[state.currentModule]) state.currentModule = MODULES.find(module => project.modules?.[module.id])?.id || "writing";
     state.dailyGoal = Number(snapshot.dailyGoal) || Number(projectConfig.dailyWordGoal) || DEFAULT_GOAL;
     state.projectWordGoal = Number.isInteger(projectConfig.projectWordGoal) && projectConfig.projectWordGoal > 0
@@ -2961,7 +3061,7 @@
     persistBrowserState();
     renderAll();
     if (!state.activePath) {
-      const nextPath = state.tabs.at(-1) || [...state.files.keys()].find(file => file.endsWith(".md"));
+      const nextPath = fileTabs().at(-1) || [...state.files.keys()].find(file => file.endsWith(".md"));
       if (nextPath) openFile(nextPath);
       else {
         $("#document-title").value = "";
@@ -3097,9 +3197,12 @@
 
   function openFile(path) {
     if (!path || !state.files.has(path)) return;
-    if (activeProject()?.modules?.writing) {
-      state.currentModule = "writing";
+    setCenterSurface("editor");
+    const targetModule = moduleForPath(path);
+    if (targetModule) {
+      state.currentModule = targetModule;
       state.currentView = "editor";
+      state.moduleMemory[targetModule] = path;
       $("#lifecycle-view").hidden = true;
       $("[data-panel=editor]").hidden = false;
       renderModuleNavigation();
@@ -3142,6 +3245,7 @@
     renderBinder();
     updateStats();
     updateAutoLinks();
+    updateChapterSwitcher();
   }
 
   function renderChapterNotes() {
@@ -3154,22 +3258,63 @@
     if (isChapter) $("#chapter-notes-context").textContent = basename(state.activePath);
   }
 
+  function updateChapterSwitcher() {
+    const switcher = $("#chapter-switcher");
+    if (!switcher) return;
+    const show = state.currentModule === "writing"
+      && state.currentView === "editor"
+      && Boolean(activeProject()?.modules?.writing)
+      && (moduleOfPath(state.activePath) === "writing" || !state.activePath);
+    switcher.hidden = !show;
+    if (!show) return;
+    const select = $("#chapter-switcher-select");
+    const chapters = manuscriptChapters();
+    const previous = select.value;
+    select.replaceChildren();
+    if (!chapters.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No chapters yet";
+      select.append(option);
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    chapters.forEach(path => {
+      const option = document.createElement("option");
+      option.value = path;
+      option.textContent = chapterDisplayName(path) || basename(path);
+      select.append(option);
+    });
+    select.value = chapters.includes(state.activePath) ? state.activePath : (chapters.includes(previous) ? previous : chapters[0]);
+  }
+
   function renderTabs() {
     const container = $("#tabs");
     container.replaceChildren();
     state.tabs.forEach(path => {
-      const tab = document.createElement("div");
-      tab.className = `tab${path === state.activePath ? " active" : ""}`;
-      tab.innerHTML = `<span class="tab-label">${escapeHtml(basename(path))}</span><button class="tab-close" aria-label="Close ${escapeHtml(basename(path))}">×</button>`;
-      tab.addEventListener("click", event => {
-        if (event.target.closest(".tab-close")) {
-          event.stopPropagation();
-          closeTab(path);
-        } else openFile(path);
-      });
-      container.append(tab);
+      if (isDictionaryTab(path)) {
+        if (state.currentModule !== "plotting") return;
+        container.append(createTab("Dictionary", state.currentView === "dictionary", () => void openDictionaryView(), () => closeTab(DICTIONARY_TAB)));
+        return;
+      }
+      if (moduleForPath(path) !== state.currentModule) return;
+      container.append(createTab(basename(path), state.currentView !== "dictionary" && path === state.activePath, () => openFile(path), () => closeTab(path)));
     });
     renderSplitTabs();
+  }
+
+  function createTab(label, active, onOpen, onClose) {
+    const tab = document.createElement("div");
+    tab.className = `tab${active ? " active" : ""}`;
+    tab.innerHTML = `<span class="tab-label">${escapeHtml(label)}</span><button class="tab-close" aria-label="Close ${escapeHtml(label)}">×</button>`;
+    tab.addEventListener("click", event => {
+      if (event.target.closest(".tab-close")) {
+        event.stopPropagation();
+        onClose();
+      } else onOpen();
+    });
+    return tab;
   }
 
   function renderSplitTabs() {
@@ -3190,17 +3335,13 @@
     }
     state.tabs = state.tabs.filter(tab => tab !== path);
     if (state.splitPath === path) state.splitPath = "";
-    if (state.activePath === path) {
-      state.activePath = state.tabs.at(-1) || "";
-      if (state.activePath) openFile(state.activePath);
-      else {
-        $("#document-title").value = "";
-        $("#document-content").value = "";
-        $("#document-content").hidden = true;
-        $("#rich-document-content").hidden = false;
-        $("#rich-document-content").innerHTML = "";
-        updateStats();
-      }
+    const closingDictionary = isDictionaryTab(path);
+    if ((closingDictionary && state.currentView === "dictionary") || (!closingDictionary && state.activePath === path)) {
+      const remaining = state.tabs.filter(tab => isDictionaryTab(tab) ? state.currentModule === "plotting" : moduleForPath(tab) === state.currentModule);
+      const next = remaining.at(-1) || "";
+      if (isDictionaryTab(next)) void openDictionaryView();
+      else if (next) openFile(next);
+      else clearEditor();
     }
     renderTabs();
     renderBinder();
@@ -3757,7 +3898,7 @@
       state.tabs = [];
       state.activePath = "";
       const existing = state.projects.find(project => project.storage === "folder" && (desktop ? project.folderPath === handle.path : project.name === handle.name));
-      const project = existing || { id: `project-${crypto.randomUUID()}`, name: handle.name, storage: "folder", modules: { ideation: false, writing: true, editing: false, publishing: false } };
+      const project = existing || { id: `project-${crypto.randomUUID()}`, name: handle.name, storage: "folder", modules: { ideation: false, plotting: false, writing: true, editing: false, publishing: false } };
       if (desktop) project.folderPath = handle.path;
       if (!existing) state.projects.push(project);
       state.projectId = project.id;
@@ -3979,7 +4120,7 @@
 
   function setupSplit(direction) {
     if (!state.splitPath) {
-      state.splitPath = state.tabs.find(path => path !== state.activePath) || state.activePath;
+      state.splitPath = fileTabs().find(path => path !== state.activePath) || state.activePath;
       if (state.splitPath === state.activePath) {
         const other = [...state.files.keys()].find(path => path !== state.activePath);
         if (other) state.splitPath = other;
@@ -4188,8 +4329,8 @@
     else if (action === "schema") openSchemaEditor();
     else if (action === "settings") openSettingsDialog();
     else if (action === "goal") void changeGoal();
-    else if (action === "toggle-left") document.body.classList.toggle("left-hidden");
-    else if (action === "toggle-right") document.body.classList.toggle("right-hidden");
+    else if (action === "toggle-left") { state.collapsed.left = !state.collapsed.left; applyModuleVisibility(); }
+    else if (action === "toggle-right") { state.collapsed.right = !state.collapsed.right; applyModuleVisibility(); }
     else if (action === "split-vertical") setupSplit("vertical");
     else if (action === "reset-layout") resetLayout();
     else if (action === "plot-planner") openPlotPlannerView();
@@ -4492,6 +4633,11 @@
     $("#new-timeline").addEventListener("click", () => newFile("timeline"));
     $("#dictionary-open").addEventListener("click", () => void openDictionaryView());
     $("#manuscript-index-open").addEventListener("click", () => void openManuscriptIndex());
+    $("#chapter-switcher-select").addEventListener("change", event => {
+      if (event.target.value) openFile(event.target.value);
+    });
+    $("#chapter-switcher-new").addEventListener("click", () => newFile("chapter"));
+    $("#chapter-switcher-index").addEventListener("click", () => void openManuscriptIndex());
     $("#new-menu").addEventListener("click", () => showNewLoreMenu());
     $$("[data-binder-toggle]").forEach(button => button.addEventListener("click", () => {
       const group = button.dataset.binderToggle;
@@ -4538,12 +4684,14 @@
       if (enabled) $("#rich-document-content").focus({ preventScroll: true });
     });
     $$("[data-collapse]").forEach(button => button.addEventListener("click", () => {
-      document.body.classList.toggle(button.dataset.collapse === "left" ? "left-hidden" : "right-hidden");
+      const side = button.dataset.collapse;
+      state.collapsed[side] = !state.collapsed[side];
+      applyModuleVisibility();
     }));
     document.addEventListener("keydown", event => {
       const target = event.target;
       if (event.key === "Tab"
-        && state.currentModule === "writing"
+        && ["writing", "plotting"].includes(state.currentModule)
         && state.currentView === "editor"
         && (target === $("#rich-document-content") || target === $("#document-content") || target === $("#split-content"))
         && !target.hidden) {
@@ -4804,12 +4952,14 @@
       element.classList.remove("floating-panel");
     });
     document.body.classList.remove("left-hidden", "right-hidden");
+    state.collapsed = { left: false, right: false };
     $$(".dock-column").forEach(column => column.classList.remove("is-hidden"));
     $(".workspace").style.removeProperty("--left-width");
     $(".workspace").style.removeProperty("--right-width");
     $("#split-surface").hidden = true;
     $("#editor-layout").classList.remove("vertical");
     state.splitPath = "";
+    applyModuleVisibility();
     notify("Layout reset");
   }
 

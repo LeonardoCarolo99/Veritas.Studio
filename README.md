@@ -57,7 +57,7 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 
 ### 🗺️ A world with room to grow
 
-- A binder for chapters, characters, locations, factions, timelines, and a custom-word dictionary
+- A binder for characters, locations, factions, timelines, and a custom-word dictionary
 - Structured worldbuilding fields with editable templates
 - **AutoLinks** surfaces worldbuilding notes mentioned in your draft while editing chapters
 - A plot planner for story threads, events, arcs, and Surface/Shadow layers
@@ -72,7 +72,7 @@ Long-form writing rarely happens in one place. Drafts end up in one folder, char
 
 Turn on only the parts of the process you need:
 
-**Ideation** for loglines and premises · **Writing** for manuscripts and story planning · **Editing** for snapshots and revision checklists · **Publishing** for book details, marketing, launch planning, and finances.
+**Ideation** for loglines and premises · **Plotting** for the project binder, worldbuilding, timelines, and the plot planner · **Writing** for manuscript drafting and the inspector · **Editing** for snapshots and revision checklists · **Publishing** for book details, marketing, launch planning, and finances.
 
 </td>
 <td width="50%" valign="top">
@@ -98,7 +98,7 @@ Open `index.html` in a modern browser. For direct access to a project folder, se
 
 If folder access is unavailable, Veritas uses a browser-local vault. Browser-local projects are stored in that browser on that device; they are not automatically included in a Git checkout.
 
-The first-run **Veritas Studio Tutorial** workspace includes editable walkthroughs for chapters, chapter notes, worldbuilding entries and templates, timelines, the plot planner, and the Ideation, Editing, and Publishing modules. The lifecycle modules are optional; enable them from the project switcher to explore their guides.
+The first-run **Veritas Studio Tutorial** workspace includes editable walkthroughs for chapters, chapter notes, worldbuilding entries and templates, timelines, the plot planner, and the Ideation, Plotting, Writing, Editing, and Publishing modules. Plotting and the other optional modules can be enabled from the project switcher to explore their guides.
 
 ### Run the Windows desktop app
 
@@ -147,12 +147,13 @@ Veritas stores manuscript content as Markdown and project details as JSON. Choos
 
 ## A project shaped around your process
 
-Enable the lifecycle modules that are useful to you from the project manager. You can change them later without moving your project files.
+Enable the modules that are useful to you from the project manager. You can change them later without moving your project files.
 
 | Module | What it holds |
 |:---|:---|
 | **Ideation** | Logline, premise, and conceptual notes |
-| **Writing** | Manuscript, worldbuilding binder, and plot planner |
+| **Plotting** | Project binder, worldbuilding entries, timelines, and the plot planner |
+| **Writing** | Manuscript editor, chapter switcher, and inspector |
 | **Editing** | Named manuscript snapshots and revision checklists |
 | **Publishing** | Book metadata, marketing copy, launch checklist, income, and expenses |
 | **To-do** | Small next steps for the current project |
